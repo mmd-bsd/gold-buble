@@ -1,0 +1,6 @@
+{
+  "name": "Iranian Gold Bubble Monitor",
+  "description": "Real-time Iranian gold bubble (حباب طلا) monitor, theoretical 18K valuation calculator, interactive historical charts, and volatility alert PWA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
