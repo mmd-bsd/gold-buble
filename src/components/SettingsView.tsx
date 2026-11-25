@@ -8,6 +8,21 @@ interface SettingsViewProps {
   onSaveSettings: (partial: Partial<AppSettings>) => Promise<AppSettings>;
 }
 
+const controlCls =
+  'min-h-[42px] w-full rounded-xl border border-white/10 bg-canvas px-3 py-2 text-[12.5px] text-slate-100 tabular-nums transition-colors focus:border-amber-400/50';
+
+const Field: React.FC<{
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}> = ({ label, hint, children }) => (
+  <div>
+    <p className="text-[12px] font-medium text-slate-300">{label}</p>
+    {hint && <p className="mt-1 text-[10.5px] text-slate-500">{hint}</p>}
+    <div className="mt-2">{children}</div>
+  </div>
+);
+
 export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSettings }) => {
   const [form, setForm] = useState<AppSettings | null>(settings);
   const [saving, setSaving] = useState(false);
@@ -22,7 +37,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
 
   if (!form) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-[#111827] p-8 text-center text-sm text-slate-400">
+      <div className="rounded-2xl border border-white/[0.07] bg-panel p-8 text-center text-[13px] text-slate-400">
         در حال بارگذاری تنظیمات...
       </div>
     );
@@ -35,7 +50,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
     setErrorNotice(null);
     try {
       await onSaveSettings(form);
-      setSavedNotice('تنظیمات با موفقیت ذخیره و در موتور محاسبه اعمال شد.');
+      setSavedNotice('تنظیمات در این مرورگر ذخیره و در محاسبات اعمال شد.');
     } catch (err) {
       setErrorNotice(err instanceof Error ? err.message : 'خطا در ذخیره تنظیمات');
     } finally {
@@ -44,69 +59,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-4xl space-y-7">
       <div>
-        <h1 className="text-xl font-bold text-slate-100">تنظیمات سامانه، منابع داده و نگهداری</h1>
-        <p className="text-xs text-slate-400 mt-1">
-          پیکربندی بازه جمع‌آوری داده، نحوه محاسبه قیمت مرجع، آستانه اختلاف منابع و راهنمای استقرار اندروید
+        <h1 className="text-[22px] font-extrabold tracking-tight text-slate-50">تنظیمات سامانه، منابع داده و نگهداری</h1>
+        <p className="mt-1.5 text-[12.5px] leading-6 text-slate-400">
+          پیکربندی بازه بروزرسانی، نحوه محاسبه قیمت مرجع، آستانه اختلاف منابع و رفتار هشدارها
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-800 bg-[#111827] p-5 md:p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-2">
-              بازه بروزرسانی خودکار (ثانیه)
-            </label>
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-white/[0.07] bg-panel p-5 md:p-6">
+        <div className="grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-2">
+          <Field label="بازه بروزرسانی خودکار (ثانیه)" hint="حداقل ۱۰ ثانیه، پیشنهاد: ۳۰ ثانیه">
             <input
               type="number"
               min={10}
               max={3600}
               value={form.refreshIntervalSec}
               onChange={(e) => setForm({ ...form, refreshIntervalSec: Number(e.target.value) })}
-              className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100 font-mono-tabular"
+              className={controlCls}
             />
-            <p className="text-[11px] text-slate-500 mt-1">حداقل ۱۰ ثانیه، پیشنهاد: ۳۰ ثانیه</p>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-2">
-              آستانه اختلاف منابع داخلی (تومان)
-            </label>
+          <Field label="آستانه اختلاف منابع داخلی (تومان)" hint="مقدار پیش‌فرض: ۱۰۰٬۰۰۰ تومان">
             <input
               type="number"
               min={0}
               step={10000}
               value={form.discrepancyThresholdToman}
               onChange={(e) => setForm({ ...form, discrepancyThresholdToman: Number(e.target.value) })}
-              className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100 font-mono-tabular"
+              className={controlCls}
             />
-            <p className="text-[11px] text-slate-500 mt-1">مقدار پیش‌فرض: ۱۰۰٬۰۰۰ تومان</p>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-2">
-              منبع ترجیحی قیمت طلای ۱۸ عیار داخلی
-            </label>
+          <Field label="منبع ترجیحی قیمت طلای ۱۸ عیار داخلی">
             <select
               value={form.preferredSource}
               onChange={(e) => setForm({ ...form, preferredSource: e.target.value as PreferredSource })}
-              className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100"
+              className={controlCls}
             >
               <option value="auto">خودکار (میانگین در محدوده مجاز)</option>
               <option value="tgju">همیشه TGJU</option>
               <option value="digikala">همیشه دیجی‌کالا ولث</option>
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-2">
-              بازه زمانی پیش‌فرض نمودارها
-            </label>
+          <Field label="بازه زمانی پیش‌فرض نمودارها">
             <select
               value={form.defaultChartRange}
               onChange={(e) => setForm({ ...form, defaultChartRange: e.target.value as ChartRange })}
-              className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100"
+              className={controlCls}
             >
               <option value="1h">۱ ساعت</option>
               <option value="6h">۶ ساعت</option>
@@ -116,77 +117,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               <option value="30d">۳۰ روز</option>
               <option value="all">کل تاریخچه</option>
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-2">
-              آستانه تشخیص داده قدیمی / تاخیر (ثانیه)
-            </label>
+          <Field label="آستانه تشخیص داده قدیمی / تاخیر (ثانیه)" hint="پیش‌فرض: ۳۰۰ ثانیه">
             <input
               type="number"
               min={30}
               max={86400}
               value={form.staleThresholdSec}
               onChange={(e) => setForm({ ...form, staleThresholdSec: Number(e.target.value) })}
-              className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100 font-mono-tabular"
+              className={controlCls}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-2">
-              محدوده خنثی / نزدیک به صفر (تومان)
-            </label>
+          <Field label="محدوده خنثی / نزدیک به صفر (تومان)" hint="پیش‌فرض: ۲۵٬۰۰۰ تومان">
             <input
               type="number"
               min={0}
               step={5000}
               value={form.nearZeroBandToman}
               onChange={(e) => setForm({ ...form, nearZeroBandToman: Number(e.target.value) })}
-              className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100 font-mono-tabular"
+              className={controlCls}
             />
-          </div>
+          </Field>
         </div>
 
         {/* Toggles */}
-        <div className="pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className="flex items-center gap-3 cursor-pointer">
+        <div className="grid grid-cols-1 gap-4 border-t border-white/[0.06] pt-5 sm:grid-cols-2">
+          <label className="flex cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               checked={form.autoAveraging}
               onChange={(e) => setForm({ ...form, autoAveraging: e.target.checked })}
-              className="w-4 h-4 accent-amber-500"
+              className="h-4 w-4 rounded accent-amber-500"
             />
-            <span className="text-xs text-slate-200">میانگین‌گیری خودکار در اختلاف کم</span>
+            <span className="text-[12.5px] text-slate-200">میانگین‌گیری خودکار در اختلاف کم</span>
           </label>
 
-          <label className="flex items-center gap-3 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               checked={form.soundAlertsEnabled}
               onChange={(e) => setForm({ ...form, soundAlertsEnabled: e.target.checked })}
-              className="w-4 h-4 accent-amber-500"
+              className="h-4 w-4 rounded accent-amber-500"
             />
-            <span className="text-xs text-slate-200">پخش صدای ظریف هنگام هشدار جدید</span>
+            <span className="text-[12.5px] text-slate-200">پخش صدای ظریف هنگام هشدار جدید</span>
           </label>
         </div>
 
         {/* Manual Price Override */}
-        <div className="pt-4 border-t border-slate-800 space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
+        <div className="space-y-3 border-t border-white/[0.06] pt-5">
+          <label className="flex cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               checked={form.manualOverrideEnabled}
               onChange={(e) => setForm({ ...form, manualOverrideEnabled: e.target.checked })}
-              className="w-4 h-4 accent-amber-500"
+              className="h-4 w-4 rounded accent-amber-500"
             />
-            <span className="text-sm font-medium text-amber-300">
-              فعال‌سازی قیمت دستی مرجع (Override در زمان اختلال یا تصمیم تحلیلگر)
+            <span className="text-[12.5px] font-semibold text-amber-200">
+              فعال‌سازی قیمت دستی مرجع (در زمان اختلال یا تصمیم تحلیلگر)
             </span>
           </label>
 
           {form.manualOverrideEnabled && (
-            <div className="max-w-sm">
-              <label className="block text-xs text-slate-400 mb-1.5">
+            <div className="max-w-sm rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-4">
+              <label className="mb-1.5 block text-[11.5px] text-slate-300">
                 قیمت دستی هر گرم طلای ۱۸ عیار (تومان)
               </label>
               <input
@@ -201,56 +196,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                   })
                 }
                 placeholder="مثال: ۲۵۵۰۰۰۰۰"
-                className="w-full rounded-lg border border-amber-500/40 bg-[#0B0F17] px-3 py-2.5 text-sm text-slate-100 font-mono-tabular"
+                className={`${controlCls} border-amber-400/30`}
               />
             </div>
           )}
         </div>
 
-        <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
+          <div className="text-[11.5px]">
             {savedNotice && (
-              <span className="inline-flex items-center gap-1.5 text-emerald-400">
-                <Check className="w-4 h-4" />
+              <span className="inline-flex items-center gap-1.5 text-emerald-300">
+                <Check className="h-4 w-4" />
                 {savedNotice}
               </span>
             )}
-            {errorNotice && <span className="text-red-400">{errorNotice}</span>}
+            {errorNotice && <span className="text-red-300">{errorNotice}</span>}
           </div>
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition-colors min-h-[42px]"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-gradient-to-l from-amber-500 to-amber-400 px-5 py-2.5 text-[12.5px] font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            <Save className="w-4 h-4" />
+            <Save className="h-4 w-4" />
             <span>{saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات'}</span>
           </button>
         </div>
       </form>
 
       {/* Website installation & local storage guide */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <section className="rounded-xl border border-slate-800 bg-[#111827] p-5 space-y-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="space-y-3 rounded-2xl border border-white/[0.07] bg-panel p-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-amber-400" />
-              <h2 className="text-sm font-semibold text-slate-100">افزودن به صفحه اصلی موبایل یا دسکتاپ</h2>
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-amber-400/15 bg-amber-400/10 text-amber-300">
+                <Smartphone className="h-4 w-4" />
+              </span>
+              <h2 className="text-[13.5px] font-bold text-slate-100">افزودن به صفحه اصلی موبایل یا دسکتاپ</h2>
             </div>
             <PWAInstallButton compact />
           </div>
-          <ol className="text-xs text-slate-300 space-y-2 leading-relaxed list-decimal list-inside">
+          <ol className="list-inside list-decimal space-y-2 text-[11.5px] leading-6 text-slate-400">
             <li>نشانی وب‌اپلیکیشن را در Chrome (اندروید یا دسکتاپ) باز کنید.</li>
             <li>دکمه «نصب اپلیکیشن» در بالای صفحه یا گزینه Add to Home Screen / Install App منوی مرورگر را انتخاب کنید.</li>
             <li>پس از نصب، با یک لمس آیکون برنامه باز می‌شود. بروزرسانی داده‌ها و بررسی هشدارها هنگام باز بودن صفحه انجام می‌شود.</li>
           </ol>
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-[#111827] p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-sky-400" />
-            <h2 className="text-sm font-semibold text-slate-100">محل ذخیره داده‌ها در نسخه وب</h2>
+        <section className="space-y-3 rounded-2xl border border-white/[0.07] bg-panel p-5">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-sky-400/15 bg-sky-400/10 text-sky-300">
+              <Database className="h-4 w-4" />
+            </span>
+            <h2 className="text-[13.5px] font-bold text-slate-100">محل ذخیره داده‌ها در نسخه وب</h2>
           </div>
-          <ul className="text-xs text-slate-300 space-y-2 leading-relaxed list-disc list-inside">
+          <ul className="list-inside list-disc space-y-2 text-[11.5px] leading-6 text-slate-400">
             <li>این نسخه بدون سرور دائمی و پایگاه داده مرکزی کار می‌کند؛ قیمت‌ها هنگام باز بودن صفحه از منابع دریافت و در همین مرورگر ذخیره می‌شوند.</li>
             <li>سوابق نمودارها، تنظیمات، قوانین هشدار و تاریخچه هشدارها در حافظه محلی مرورگر (localStorage) نگه‌داری می‌شوند و بین گوشی و دسکتاپ همگام نمی‌شوند.</li>
             <li>برای بازه‌های بلندمدت، ۴۵ روز داده روزانه TGJU به‌صورت خودکار بارگذاری می‌شود. پاک کردن داده‌های مرورگر این سوابق را حذف می‌کند.</li>

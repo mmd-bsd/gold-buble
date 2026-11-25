@@ -80,7 +80,7 @@ All pricing math, history, settings, alert rules and alerts live in the browser.
 - No router: `src/App.tsx` owns the active tab (dashboard/charts/alerts/settings).
 - UI is Persian/RTL and dark-only (`#0B0F17`). Format all numbers/dates with `src/utils/formatters.ts` (`fa-IR`, Persian calendar); negative currency uses U+2212 `−`. New UI copy should be Persian.
 - Charts use `lightweight-charts` in `BubbleChartPanel`; it receives already-downsampled `MeasurementRecord[]`.
-- Tailwind v4 through `@tailwindcss/vite` — no `tailwind.config`; theme tokens/fonts live in `src/index.css`.
+- Tailwind v4 through `@tailwindcss/vite` — no `tailwind.config`; theme tokens live in `src/index.css`. Typography is Estedad for Persian/numerals with IBM Plex Mono for Latin-only technical strings, loaded from Google Fonts in `index.html`.
 - PWA: `vite-plugin-pwa` generates the manifest/service worker for installability only. There is no push service worker; keep `navigateFallbackDenylist` for `/api/`.
 - `vite.config.ts` has a build-only plugin copying `src/assets` into `dist/src/assets` for root-relative image URLs. `DISABLE_HMR=true` intentionally disables HMR/file watching; treat it as expected.
 

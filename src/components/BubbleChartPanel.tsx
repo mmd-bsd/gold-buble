@@ -86,31 +86,48 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
     const el = containerRef.current;
     if (!el) return;
 
+    const isLongRange = range === '7d' || range === '30d' || range === 'all';
+    const axisDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const axisTimeFormat = new Intl.DateTimeFormat('fa-IR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
     const chart = createChart(el, {
       width: el.clientWidth,
       height,
       layout: {
-        background: { type: ColorType.Solid, color: '#0F1623' },
+        background: { type: ColorType.Solid, color: '#0D1420' },
         textColor: '#94A3B8',
-        fontFamily: "'Vazirmatn', 'JetBrains Mono', sans-serif",
-        fontSize: 12,
+        fontFamily: "'Estedad', 'IBM Plex Mono', sans-serif",
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(148, 163, 184, 0.07)' },
-        horzLines: { color: 'rgba(148, 163, 184, 0.08)' },
+        vertLines: { color: 'rgba(148, 163, 184, 0.045)' },
+        horzLines: { color: 'rgba(148, 163, 184, 0.06)' },
       },
       rightPriceScale: {
-        borderColor: 'rgba(148, 163, 184, 0.14)',
-        scaleMargins: { top: 0.12, bottom: 0.12 },
+        borderColor: 'rgba(148, 163, 184, 0.10)',
+        scaleMargins: { top: 0.16, bottom: 0.16 },
       },
       timeScale: {
-        borderColor: 'rgba(148, 163, 184, 0.14)',
+        borderColor: 'rgba(148, 163, 184, 0.10)',
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 4,
+        barSpacing: 8,
+        minBarSpacing: 2,
+        fixLeftEdge: true,
+        tickMarkFormatter: (time: number) =>
+          isLongRange ? axisDateFormat.format(new Date(time * 1000)) : axisTimeFormat.format(new Date(time * 1000)),
       },
       crosshair: {
-        vertLine: { color: 'rgba(212, 175, 55, 0.45)', width: 1, style: LineStyle.Dashed },
-        horzLine: { color: 'rgba(212, 175, 55, 0.45)', width: 1, style: LineStyle.Dashed },
+        vertLine: { color: 'rgba(244, 185, 66, 0.35)', width: 1, style: LineStyle.Dashed },
+        horzLine: { color: 'rgba(244, 185, 66, 0.35)', width: 1, style: LineStyle.Dashed },
       },
       localization: {
         locale: 'fa-IR',
@@ -135,13 +152,15 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
     if (mode === 'bubble_toman' || mode === 'bubble_percent') {
       const baselineSeries = chart.addSeries(BaselineSeries, {
         baseValue: { type: 'price', price: 0 },
-        topLineColor: '#EF4444',
-        topFillColor1: 'rgba(239, 68, 68, 0.34)',
-        topFillColor2: 'rgba(239, 68, 68, 0.04)',
-        bottomLineColor: '#10B981',
-        bottomFillColor1: 'rgba(16, 185, 129, 0.04)',
-        bottomFillColor2: 'rgba(16, 185, 129, 0.34)',
+        topLineColor: '#F87171',
+        topFillColor1: 'rgba(248, 113, 113, 0.16)',
+        topFillColor2: 'rgba(248, 113, 113, 0.01)',
+        bottomLineColor: '#34D399',
+        bottomFillColor1: 'rgba(52, 211, 153, 0.01)',
+        bottomFillColor2: 'rgba(52, 211, 153, 0.16)',
         lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: false,
       });
 
       const data = sanitizedPoints
@@ -161,11 +180,11 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
       baselineSeries.setData(data);
       baselineSeries.createPriceLine({
         price: 0,
-        color: '#E2E8F0',
-        lineWidth: 2,
+        color: 'rgba(226, 232, 240, 0.45)',
+        lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: 'خط تعادل (۰)',
+        title: 'تعادل (۰)',
       });
 
       chart.subscribeCrosshairMove((param) => {
@@ -185,15 +204,19 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
       });
     } else if (mode === 'comparison') {
       const refSeries = chart.addSeries(LineSeries, {
-        color: '#D4AF37',
+        color: '#F4B942',
         lineWidth: 2,
         title: 'مرجع داخلی',
+        priceLineVisible: false,
+        lastValueVisible: false,
       });
       const theoSeries = chart.addSeries(LineSeries, {
         color: '#38BDF8',
         lineWidth: 2,
         lineStyle: LineStyle.Solid,
         title: 'تئوری جهانی',
+        priceLineVisible: false,
+        lastValueVisible: false,
       });
 
       const refData = sanitizedPoints
@@ -226,8 +249,10 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
     } else {
       const isUsd = mode === 'usd_toman';
       const lineSeries = chart.addSeries(LineSeries, {
-        color: isUsd ? '#38BDF8' : '#F59E0B',
+        color: isUsd ? '#38BDF8' : '#F4B942',
         lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: false,
       });
 
       const data = sanitizedPoints
@@ -270,48 +295,48 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
       chart.remove();
       chartRef.current = null;
     };
-  }, [sanitizedPoints, mode, height]);
+  }, [sanitizedPoints, mode, height, range]);
 
   const handleFitContent = () => {
     chartRef.current?.timeScale().fitContent();
   };
 
   return (
-    <div className="rounded-xl border border-slate-800/90 bg-[#0F1623] p-4 md:p-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between pb-4 border-b border-slate-800/80">
-        <div className="flex flex-wrap items-center gap-1.5">
+    <div className="rounded-2xl border border-white/[0.07] bg-panel p-4 md:p-5">
+      <div className="flex flex-col gap-3 border-b border-white/[0.06] pb-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="no-scrollbar -mx-1 flex min-w-0 items-center gap-1.5 overflow-x-auto px-1">
           {showModeTabs && onModeChange ? (
             CHART_MODE_OPTIONS.map((opt) => (
               <button
                 key={opt.key}
                 type="button"
                 onClick={() => onModeChange(opt.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 min-h-[36px] ${
+                className={`min-h-[40px] shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors lg:min-h-[36px] ${
                   mode === opt.key
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 border border-transparent'
+                    ? 'bg-amber-400/10 text-amber-200 shadow-[inset_0_0_0_1px_rgba(244,185,66,0.2)]'
+                    : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-100'
                 }`}
               >
                 {opt.label}
               </button>
             ))
           ) : (
-            <h3 className="text-sm font-semibold text-slate-200">
+            <h3 className="text-[13px] font-semibold text-slate-200">
               {CHART_MODE_OPTIONS.find((m) => m.key === mode)?.label}
             </h3>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex flex-wrap items-center gap-1 rounded-lg bg-[#0B0F17] p-1 border border-slate-800">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-full border border-white/[0.06] bg-black/20 p-1 lg:flex-none">
             {RANGE_OPTIONS.map((r) => (
               <button
                 key={r.key}
                 type="button"
                 onClick={() => onRangeChange(r.key)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 min-h-[32px] ${
+                className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors lg:min-h-[34px] ${
                   range === r.key
-                    ? 'bg-slate-800 text-amber-300'
+                    ? 'bg-white/[0.07] text-amber-200'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -323,46 +348,49 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
             type="button"
             onClick={handleFitContent}
             title="بازنشانی بزرگنمایی نمودار"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-[#0B0F17] p-2 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition-colors min-h-[36px] min-w-[36px]"
+            aria-label="بازنشانی بزرگنمایی نمودار"
+            className="inline-flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-black/20 p-2 text-slate-400 transition-colors hover:border-white/15 hover:text-slate-100 lg:min-h-[38px] lg:min-w-[38px]"
           >
-            <Maximize2 className="w-4 h-4" />
+            <Maximize2 className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       {/* Live crosshair summary strip */}
-      <div className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[11.5px] text-slate-400">
         {hoverInfo ? (
-          <div className="flex flex-wrap items-center gap-3 font-mono-tabular">
+          <div className="flex flex-wrap items-center gap-3 tabular-nums">
             <span className="text-slate-300">{formatPersianDateTime(hoverInfo.timeMs)}</span>
-            <span aria-hidden="true">·</span>
+            <span aria-hidden="true" className="text-slate-600">·</span>
             {mode === 'bubble_toman' && (
-              <span className={hoverInfo.primaryValue >= 0 ? 'text-red-400' : 'text-emerald-400'}>
-                حباب: {formatToman(hoverInfo.primaryValue, true)} تومان
+              <span className={hoverInfo.primaryValue >= 0 ? 'text-red-300' : 'text-emerald-300'}>
+                حباب: <span dir="ltr">{formatToman(hoverInfo.primaryValue, true)}</span> تومان
               </span>
             )}
             {mode === 'bubble_percent' && (
-              <span className={hoverInfo.primaryValue >= 0 ? 'text-red-400' : 'text-emerald-400'}>
-                درصد حباب: {formatPercent(hoverInfo.primaryValue, true)}
+              <span className={hoverInfo.primaryValue >= 0 ? 'text-red-300' : 'text-emerald-300'}>
+                درصد حباب: <span dir="ltr">{formatPercent(hoverInfo.primaryValue, true)}</span>
               </span>
             )}
             {mode === 'comparison' && (
               <>
-                <span className="text-amber-300">
-                  مرجع داخلی: {formatToman(hoverInfo.primaryValue)} تومان
+                <span className="text-amber-200">
+                  مرجع داخلی: <span dir="ltr">{formatToman(hoverInfo.primaryValue)}</span> تومان
                 </span>
                 {hoverInfo.secondaryValue !== undefined && (
-                  <span className="text-sky-400">
-                    ارزش تئوری: {formatToman(hoverInfo.secondaryValue)} تومان
+                  <span className="text-sky-300">
+                    ارزش تئوری: <span dir="ltr">{formatToman(hoverInfo.secondaryValue)}</span> تومان
                   </span>
                 )}
               </>
             )}
             {mode === 'usd_toman' && (
-              <span className="text-sky-400">دلار: {formatToman(hoverInfo.primaryValue)} تومان</span>
+              <span className="text-sky-300">
+                دلار: <span dir="ltr">{formatToman(hoverInfo.primaryValue)}</span> تومان
+              </span>
             )}
             {mode === 'ounce_usd' && (
-              <span className="text-amber-300">انس جهانی: {formatUsd(hoverInfo.primaryValue)}</span>
+              <span className="text-amber-200">انس جهانی: {formatUsd(hoverInfo.primaryValue)}</span>
             )}
           </div>
         ) : (
@@ -376,23 +404,27 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
             </span>
           </div>
         )}
-        <span className="font-mono-tabular text-slate-500">
-          {new Intl.NumberFormat('fa-IR').format(sanitizedPoints.length)} نقطه ثبت‌شده
+        <span className="tabular-nums text-slate-500">
+          {new Intl.NumberFormat('fa-IR').format(sanitizedPoints.length)} نقطه
         </span>
       </div>
 
-      {sanitizedPoints.length === 0 ? (
+      {sanitizedPoints.length < 2 ? (
         <div
           style={{ height }}
-          className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-800 bg-[#0B0F17]/60 text-center p-6"
+          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-canvas/40 p-6 text-center"
         >
-          <p className="text-sm text-slate-300 font-medium">در حال جمع‌آوری اولین نقاط تاریخی...</p>
-          <p className="text-xs text-slate-500 mt-1.5">
-            با هر چرخه پایش خودکار، نقاط جدید در پایگاه داده ذخیره و روی نمودار ترسیم می‌شوند.
+          <p className="text-[13px] font-semibold text-slate-200">
+            {sanitizedPoints.length === 0 ? 'هنوز داده‌ای برای این بازه ثبت نشده است' : 'اولین نقطه ثبت شد'}
+          </p>
+          <p className="mt-2 max-w-sm text-[11.5px] leading-6 text-slate-500">
+            {sanitizedPoints.length === 0
+              ? 'با باز ماندن صفحه، داده‌ها هر چند ثانیه بروزرسانی و روند نمودار ساخته می‌شود. برای بازه‌های بلندمدت، ۴۵ روز داده روزانه هم بارگذاری می‌شود.'
+              : 'برای رسم خط روند حداقل دو اندازه‌گیری لازم است. کمی صبر کنید یا بازه زمانی دیگری را انتخاب کنید.'}
           </p>
         </div>
       ) : (
-        <div ref={containerRef} dir="ltr" className="w-full overflow-hidden rounded-lg" />
+        <div ref={containerRef} dir="ltr" className="w-full overflow-hidden rounded-xl" />
       )}
     </div>
   );
