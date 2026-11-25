@@ -23,18 +23,12 @@ export default function App() {
     loading,
     refreshing,
     error,
-    pushSupported,
-    pushSubscribed,
-    pushPermission,
     refreshNow,
     selectReferenceSource,
     updateSettings,
     updateRule,
     acknowledgeAlert,
     acknowledgeAllAlerts,
-    subscribePush,
-    unsubscribePush,
-    sendTestPush,
   } = useMarketData();
 
   const unreadAlerts = alerts.filter((a) => !a.acknowledged).length;
@@ -147,15 +141,9 @@ export default function App() {
               <AlertsView
                 alerts={alerts}
                 rules={rules}
-                pushSupported={pushSupported}
-                pushSubscribed={pushSubscribed}
-                pushPermission={pushPermission}
                 onAcknowledgeAlert={acknowledgeAlert}
                 onAcknowledgeAll={acknowledgeAllAlerts}
                 onUpdateRule={updateRule}
-                onSubscribePush={subscribePush}
-                onUnsubscribePush={unsubscribePush}
-                onSendTestPush={sendTestPush}
               />
             )}
 

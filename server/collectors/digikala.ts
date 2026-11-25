@@ -1,5 +1,5 @@
 import type { CollectorReading, DigikalaRawData, SourceStatus } from '../../shared/types.ts';
-import { digikalaRialPerMgToTomanPerGram, parsePositiveNumeric } from '../engine/normalization.ts';
+import { digikalaRialPerMgToTomanPerGram, parsePositiveNumeric } from '../../shared/engine/normalization.ts';
 
 const DIGIKALA_PRICES_URL = 'https://api.digikala.com/wealth/v1/prices/';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, BellOff, Check, CheckCheck, Send, ShieldAlert } from 'lucide-react';
+import { Check, CheckCheck, Info, ShieldAlert } from 'lucide-react';
 import type { AlertRecord, AlertRuleRecord } from '../../shared/types.ts';
 import {
   formatPercent,
@@ -10,18 +10,12 @@ import {
 interface AlertsViewProps {
   alerts: AlertRecord[];
   rules: AlertRuleRecord[];
-  pushSupported: boolean;
-  pushSubscribed: boolean;
-  pushPermission: NotificationPermission;
   onAcknowledgeAlert: (id: number) => Promise<void>;
   onAcknowledgeAll: () => Promise<void>;
   onUpdateRule: (
     id: number,
     updates: Partial<Pick<AlertRuleRecord, 'thresholdValue' | 'windowMinutes' | 'cooldownMinutes' | 'enabled'>>
   ) => Promise<AlertRuleRecord>;
-  onSubscribePush: () => Promise<void>;
-  onUnsubscribePush: () => Promise<void>;
-  onSendTestPush: () => Promise<{ sent: number; failed: number }>;
 }
 
 const RULE_UNIT_MAP: Record<AlertRuleRecord['ruleType'], string> = {
@@ -39,59 +33,17 @@ const RULE_UNIT_MAP: Record<AlertRuleRecord['ruleType'], string> = {
 export const AlertsView: React.FC<AlertsViewProps> = ({
   alerts,
   rules,
-  pushSupported,
-  pushSubscribed,
-  pushPermission,
   onAcknowledgeAlert,
   onAcknowledgeAll,
   onUpdateRule,
-  onSubscribePush,
-  onUnsubscribePush,
-  onSendTestPush,
 }) => {
-  const [pushMessage, setPushMessage] = useState<string | null>(null);
-  const [pushBusy, setPushBusy] = useState(false);
   const [ruleDrafts, setRuleDrafts] = useState<
     Record<number, { thresholdValue: string; windowMinutes: string; cooldownMinutes: string }>
   >({});
   const [savingRuleId, setSavingRuleId] = useState<number | null>(null);
+  const [ruleError, setRuleError] = useState<string | null>(null);
 
   const unreadCount = alerts.filter((a) => !a.acknowledged).length;
-
-  const handleTogglePush = async () => {
-    setPushBusy(true);
-    setPushMessage(null);
-    try {
-      if (pushSubscribed) {
-        await onUnsubscribePush();
-        setPushMessage('اشتراک اعلان‌های پس‌زمینه غیرفعال شد.');
-      } else {
-        await onSubscribePush();
-        setPushMessage('اعلان‌های پس‌زمینه (Web Push) با موفقیت فعال شد.');
-      }
-    } catch (err) {
-      setPushMessage(err instanceof Error ? err.message : 'خطا در تنظیم اعلان');
-    } finally {
-      setPushBusy(false);
-    }
-  };
-
-  const handleTestPush = async () => {
-    setPushBusy(true);
-    setPushMessage(null);
-    try {
-      const res = await onSendTestPush();
-      setPushMessage(
-        res.sent > 0
-          ? `اعلان آزمایشی به ${res.sent} دستگاه ارسال شد.`
-          : 'هیچ دستگاه فعالی برای دریافت Web Push ثبت نشده است.'
-      );
-    } catch {
-      setPushMessage('خطا در ارسال اعلان آزمایشی.');
-    } finally {
-      setPushBusy(false);
-    }
-  };
 
   const getDraft = (rule: AlertRuleRecord) => {
     return (
@@ -118,12 +70,15 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   const handleSaveRule = async (rule: AlertRuleRecord) => {
     const draft = getDraft(rule);
     setSavingRuleId(rule.id);
+    setRuleError(null);
     try {
       await onUpdateRule(rule.id, {
         thresholdValue: Number(draft.thresholdValue),
         windowMinutes: Number(draft.windowMinutes),
         cooldownMinutes: Number(draft.cooldownMinutes),
       });
+    } catch (err) {
+      setRuleError(err instanceof Error ? err.message : 'خطا در ذخیره قانون');
     } finally {
       setSavingRuleId(null);
     }
@@ -131,57 +86,17 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Web Push Subscription Banner */}
+      {/* In-page monitoring notice */}
       <section className="rounded-xl border border-slate-800 bg-[#111827] p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            {pushSubscribed ? (
-              <Bell className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            ) : (
-              <BellOff className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-            )}
-            <div>
-              <h1 className="text-base font-bold text-slate-100">
-                سیستم پایش نوسانات و اعلان‌های پس‌زمینه (Web Push)
-              </h1>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                سرور به صورت مستقل در پس‌زمینه قیمت‌ها را بررسی می‌کند و حتی در زمان بسته بودن مرورگر، هشدارهای نوسان را به گوشی اندروید یا دسکتاپ ارسال می‌کند.
-              </p>
-              <p className="text-xs text-slate-500 mt-1.5">
-                وضعیت مرورگر: {pushSupported ? (pushSubscribed ? 'فعال و متصل' : `غیرفعال (${pushPermission})`) : 'پشتیبانی نمی‌شود'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {pushSupported && (
-              <button
-                type="button"
-                disabled={pushBusy}
-                onClick={handleTogglePush}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors min-h-[40px] whitespace-nowrap ${
-                  pushSubscribed
-                    ? 'border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
-                    : 'bg-amber-500 text-slate-950 hover:bg-amber-400'
-                }`}
-              >
-                {pushSubscribed ? 'لغو اعلان پس‌زمینه' : 'فعال‌سازی اعلان پوش'}
-              </button>
-            )}
-            {pushSubscribed && (
-              <button
-                type="button"
-                disabled={pushBusy}
-                onClick={handleTestPush}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-xs text-slate-200 hover:border-amber-500/40 min-h-[40px] whitespace-nowrap"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>تست اعلان</span>
-              </button>
-            )}
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <h1 className="text-base font-bold text-slate-100">پایش نوسانات و هشدارهای درون‌صفحه‌ای</h1>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              این نسخه وب است: هنگام باز بودن صفحه، داده‌ها هر چند ثانیه بروزرسانی و قوانین هشدار بررسی می‌شوند. هشدارها، قوانین و تنظیمات در همین مرورگر ذخیره می‌شوند و پس از بستن صفحه اعلان پس‌زمینه ارسال نمی‌شود.
+            </p>
           </div>
         </div>
-        {pushMessage && <p className="mt-3 text-xs text-amber-300">{pushMessage}</p>}
       </section>
 
       {/* Triggered Alerts History */}
@@ -266,6 +181,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           <p className="text-xs text-slate-400 mt-1">
             تمام آستانه‌ها، پنجره‌های زمانی و مدت انتظار جلوگیری از تکرار (Cooldown) به صورت زنده قابل تغییر هستند.
           </p>
+          {ruleError && <p className="mt-2 text-xs text-red-400">{ruleError}</p>}
         </div>
 
         <div className="divide-y divide-slate-800/80">

@@ -1,29 +1,48 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { mergeAndValidateSettings, VALID_SOURCES } from '../../shared/defaults.ts';
+import { evaluateVolatilityRules } from '../../shared/engine/alerts.ts';
+import { getHistoryResponse, isDuplicateMeasurement, mergeMeasurements } from '../../shared/history.ts';
+import { buildMarketSnapshot, buildSnapshotFromStored } from '../../shared/snapshot.ts';
 import type {
   AlertRecord,
   AlertRuleRecord,
   AppSettings,
   ChartRange,
   HistoryResponse,
+  MarketApiResponse,
   MarketSnapshot,
+  MeasurementRecord,
   PreferredSource,
 } from '../../shared/types.ts';
+import {
+  loadAlerts,
+  loadBackfill,
+  loadLiveMeasurements,
+  loadRules,
+  loadSettings,
+  MAX_ALERTS,
+  MAX_LIVE_MEASUREMENTS,
+  saveAlerts,
+  saveBackfill,
+  saveLiveMeasurements,
+  saveRules,
+  saveSettings,
+} from '../lib/localStore';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const buffer = new ArrayBuffer(rawData.length);
-  const outputArray = new Uint8Array(buffer);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
+interface CollectorReadings {
+  tgju: MarketApiResponse['tgju'];
+  digikala: MarketApiResponse['digikala'];
+}
+
+function readErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 function playSubtleAlertTone(): void {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
@@ -43,176 +62,261 @@ function playSubtleAlertTone(): void {
 }
 
 export function useMarketData() {
-  const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
-  const [history, setHistory] = useState<HistoryResponse | null>(null);
-  const [chartRange, setChartRange] = useState<ChartRange>('24h');
-  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
-  const [rules, setRules] = useState<AlertRuleRecord[]>([]);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settings, setSettingsState] = useState<AppSettings>(() => loadSettings());
+  const [rules, setRulesState] = useState<AlertRuleRecord[]>(() => loadRules());
+  const [alerts, setAlertsState] = useState<AlertRecord[]>(() => loadAlerts());
+  const [live, setLiveState] = useState<MeasurementRecord[]>(() => loadLiveMeasurements());
+  const [backfill, setBackfillState] = useState<MeasurementRecord[]>(() => loadBackfill());
+  const [chartRange, setChartRange] = useState<ChartRange>(() => loadSettings().defaultChartRange);
+
+  const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(() => {
+    const storedSettings = loadSettings();
+    const merged = mergeMeasurements(loadBackfill(), loadLiveMeasurements());
+    if (merged.length === 0) return null;
+    const latest = merged[merged.length - 1];
+    const previous = merged.length > 1 ? merged[merged.length - 2] : null;
+    return buildSnapshotFromStored(latest, previous, storedSettings);
+  });
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [pushSupported, setPushSupported] = useState(false);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
-  const latestAlertIdRef = useRef<number | null>(null);
-  const initialRangeLoadedRef = useRef(false);
 
-  const fetchHistory = useCallback(async (range: ChartRange) => {
-    try {
-      const res = await fetch(`/api/history?range=${encodeURIComponent(range)}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as HistoryResponse;
-      setHistory(data);
-    } catch {
-      // Preserve last loaded history
-    }
+  const settingsRef = useRef(settings);
+  const rulesRef = useRef(rules);
+  const alertsRef = useRef(alerts);
+  const liveRef = useRef(live);
+  const backfillRef = useRef(backfill);
+  const readingsRef = useRef<CollectorReadings | null>(null);
+
+  const persistSettings = useCallback((next: AppSettings) => {
+    settingsRef.current = next;
+    setSettingsState(next);
+    saveSettings(next);
   }, []);
 
-  const fetchAll = useCallback(async (activeRange: ChartRange) => {
-    try {
-      const [latestRes, alertsRes, rulesRes, settingsRes] = await Promise.all([
-        fetch('/api/market/latest'),
-        fetch('/api/alerts?limit=80'),
-        fetch('/api/rules'),
-        fetch('/api/settings'),
-      ]);
+  const persistRules = useCallback((next: AlertRuleRecord[]) => {
+    rulesRef.current = next;
+    setRulesState(next);
+    saveRules(next);
+  }, []);
 
-      if (!latestRes.ok) {
-        throw new Error('خطا در دریافت داده‌های بازار');
+  const persistAlerts = useCallback((next: AlertRecord[]) => {
+    const capped = next.slice(0, MAX_ALERTS);
+    alertsRef.current = capped;
+    setAlertsState(capped);
+    saveAlerts(capped);
+  }, []);
+
+  const persistLive = useCallback((next: MeasurementRecord[]) => {
+    const capped = next.slice(-MAX_LIVE_MEASUREMENTS);
+    liveRef.current = capped;
+    setLiveState(capped);
+    saveLiveMeasurements(capped);
+  }, []);
+
+  const persistBackfill = useCallback((next: MeasurementRecord[]) => {
+    backfillRef.current = next;
+    setBackfillState(next);
+    saveBackfill(next);
+  }, []);
+
+  const applyMarketData = useCallback(
+    (data: MarketApiResponse) => {
+      const settingsNow = settingsRef.current;
+
+      if (data.history && data.history.length > 0) {
+        persistBackfill(mergeMeasurements(data.history));
       }
 
-      const latestData = (await latestRes.json()) as MarketSnapshot;
-      setSnapshot(latestData);
+      readingsRef.current = { tgju: data.tgju, digikala: data.digikala };
 
-      let loadedSettings: AppSettings | null = null;
-      if (settingsRes.ok) {
-        const sJson = (await settingsRes.json()) as { settings: AppSettings };
-        loadedSettings = sJson.settings;
-        setSettings(sJson.settings);
-        if (!initialRangeLoadedRef.current && sJson.settings.defaultChartRange) {
-          initialRangeLoadedRef.current = true;
-          setChartRange(sJson.settings.defaultChartRange);
-          void fetchHistory(sJson.settings.defaultChartRange);
-        } else {
-          void fetchHistory(activeRange);
+      const mergedBefore = mergeMeasurements(backfillRef.current, liveRef.current);
+      const previous = mergedBefore.length > 0 ? mergedBefore[mergedBefore.length - 1] : null;
+      const now = data.serverTime || Date.now();
+
+      const { record, snapshot: nextSnapshot } = buildMarketSnapshot({
+        tgju: data.tgju,
+        digikala: data.digikala,
+        settings: settingsNow,
+        previous,
+        now,
+      });
+      setSnapshot(nextSnapshot);
+
+      const latestStored = mergedBefore.length > 0 ? mergedBefore[mergedBefore.length - 1] : null;
+      const duplicate = isDuplicateMeasurement(latestStored, record);
+
+      let liveNext = liveRef.current;
+      if (!duplicate) {
+        liveNext = mergeMeasurements(liveNext, [record]).slice(-MAX_LIVE_MEASUREMENTS);
+        persistLive(liveNext);
+
+        const evaluation = evaluateVolatilityRules({
+          current: record,
+          history: mergeMeasurements(backfillRef.current, liveNext),
+          rules: rulesRef.current,
+          now,
+        });
+
+        if (evaluation.ruleUpdates.length > 0) {
+          const updates = new Map(evaluation.ruleUpdates.map((u) => [u.id, u]));
+          persistRules(
+            rulesRef.current.map((rule) => {
+              const update = updates.get(rule.id);
+              return update
+                ? { ...rule, lastTriggeredAt: update.lastTriggeredAt, lastState: update.lastState }
+                : rule;
+            })
+          );
         }
-      } else {
-        void fetchHistory(activeRange);
-      }
 
-      if (alertsRes.ok) {
-        const aJson = (await alertsRes.json()) as { alerts: AlertRecord[] };
-        setAlerts(aJson.alerts);
-        const newestId = aJson.alerts[0]?.id ?? null;
-        if (
-          latestAlertIdRef.current !== null &&
-          newestId !== null &&
-          newestId > latestAlertIdRef.current &&
-          loadedSettings?.soundAlertsEnabled
-        ) {
-          playSubtleAlertTone();
+        if (evaluation.alerts.length > 0) {
+          let nextId = alertsRef.current.reduce((max, alert) => Math.max(max, alert.id), 0) + 1;
+          const newAlerts = evaluation.alerts.map((alert) => ({ ...alert, id: nextId++ }));
+          persistAlerts([...newAlerts, ...alertsRef.current]);
+          if (settingsNow.soundAlertsEnabled) {
+            playSubtleAlertTone();
+          }
         }
-        latestAlertIdRef.current = newestId;
-      }
-
-      if (rulesRes.ok) {
-        const rJson = (await rulesRes.json()) as { rules: AlertRuleRecord[] };
-        setRules(rJson.rules);
       }
 
       setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطای ارتباط با سرور');
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchHistory]);
+    },
+    [persistAlerts, persistBackfill, persistLive, persistRules]
+  );
 
-  useEffect(() => {
-    void fetchAll(chartRange);
+  const fetchMarket = useCallback(
+    async (includeHistory: boolean) => {
+      const params = new URLSearchParams({
+        stale: String(settingsRef.current.staleThresholdSec),
+      });
+      if (includeHistory) params.set('history', '1');
+
+      const res = await fetch(`/api/market?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error('خطا در دریافت داده‌های بازار');
+      }
+      const data = (await res.json()) as MarketApiResponse;
+      applyMarketData(data);
+    },
+    [applyMarketData]
+  );
+
+  const recomputeSnapshot = useCallback((nextSettings: AppSettings) => {
+    const readings = readingsRef.current;
+    if (!readings) return;
+    const merged = mergeMeasurements(backfillRef.current, liveRef.current);
+    const previous = merged.length > 0 ? merged[merged.length - 1] : null;
+    const { snapshot: nextSnapshot } = buildMarketSnapshot({
+      tgju: readings.tgju,
+      digikala: readings.digikala,
+      settings: nextSettings,
+      previous,
+      now: Date.now(),
+    });
+    setSnapshot(nextSnapshot);
   }, []);
 
   useEffect(() => {
-    void fetchHistory(chartRange);
-  }, [chartRange, fetchHistory]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        await fetchMarket(backfillRef.current.length === 0);
+      } catch (err) {
+        if (!cancelled) setError(readErrorMessage(err, 'خطای ارتباط با سرور'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMarket]);
 
   useEffect(() => {
-    const intervalSec = Math.max(10, settings?.refreshIntervalSec ?? 30);
+    const intervalSec = Math.max(10, settings.refreshIntervalSec);
     const id = window.setInterval(() => {
-      void fetchAll(chartRange);
+      void fetchMarket(false).catch((err) => {
+        setError(readErrorMessage(err, 'خطای ارتباط با سرور'));
+      });
     }, intervalSec * 1000);
     return () => window.clearInterval(id);
-  }, [chartRange, fetchAll, settings?.refreshIntervalSec]);
+  }, [fetchMarket, settings.refreshIntervalSec]);
 
   useEffect(() => {
-    const supported =
-      typeof window !== 'undefined' &&
-      'serviceWorker' in navigator &&
-      'PushManager' in window &&
-      'Notification' in window;
-    setPushSupported(supported);
-    if (supported) {
-      setPushPermission(Notification.permission);
-      navigator.serviceWorker.ready
-        .then((reg) => reg.pushManager.getSubscription())
-        .then((sub) => setPushSubscribed(!!sub))
-        .catch(() => {});
-    }
-  }, []);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchMarket(false).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fetchMarket]);
+
+  const history = useMemo<HistoryResponse | null>(() => {
+    if (live.length === 0 && backfill.length === 0) return null;
+    return getHistoryResponse(mergeMeasurements(backfill, live), chartRange, Date.now());
+  }, [backfill, chartRange, live]);
 
   const refreshNow = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetch('/api/market/refresh', { method: 'POST' });
-      if (!res.ok) throw new Error('بروزرسانی با خطا مواجه شد');
-      const data = (await res.json()) as MarketSnapshot;
-      setSnapshot(data);
-      await Promise.all([fetchHistory(chartRange), fetchAll(chartRange)]);
+      await fetchMarket(backfillRef.current.length === 0);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'خطا در بروزرسانی');
+      setError(readErrorMessage(err, 'خطا در بروزرسانی'));
     } finally {
       setRefreshing(false);
     }
-  }, [chartRange, fetchAll, fetchHistory]);
+  }, [fetchMarket]);
 
   const selectReferenceSource = useCallback(
     async (mode: PreferredSource | 'manual', manualPriceToman?: number) => {
-      const res = await fetch('/api/market/reference-selection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, manualPriceToman }),
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error || 'خطا در ذخیره انتخاب مرجع');
+      const current = settingsRef.current;
+      let partial: Partial<AppSettings>;
+
+      if (mode === 'manual') {
+        if (
+          manualPriceToman === undefined ||
+          !Number.isFinite(manualPriceToman) ||
+          manualPriceToman <= 0 ||
+          manualPriceToman > 1_000_000_000
+        ) {
+          throw new Error('قیمت دستی واردشده نامعتبر است.');
+        }
+        partial = {
+          manualOverrideEnabled: true,
+          manualOverridePriceToman: Math.round(manualPriceToman),
+        };
+      } else {
+        if (!VALID_SOURCES.has(mode)) {
+          throw new Error('حالت انتخاب مرجع نامعتبر است.');
+        }
+        partial = { preferredSource: mode, manualOverrideEnabled: false };
       }
-      const data = (await res.json()) as { snapshot: MarketSnapshot | null; settings: AppSettings };
-      if (data.snapshot) setSnapshot(data.snapshot);
-      if (data.settings) setSettings(data.settings);
-      await fetchHistory(chartRange);
+
+      const result = mergeAndValidateSettings(current, partial);
+      if (!result.ok) {
+        throw new Error(result.error ?? 'خطا در ذخیره انتخاب مرجع');
+      }
+      persistSettings(result.value);
+      recomputeSnapshot(result.value);
     },
-    [chartRange, fetchHistory]
+    [persistSettings, recomputeSnapshot]
   );
 
   const updateSettings = useCallback(
     async (partial: Partial<AppSettings>) => {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial),
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error || 'خطا در ذخیره تنظیمات');
+      const result = mergeAndValidateSettings(settingsRef.current, partial);
+      if (!result.ok) {
+        throw new Error(result.error ?? 'خطا در ذخیره تنظیمات');
       }
-      const data = (await res.json()) as { settings: AppSettings; snapshot: MarketSnapshot | null };
-      setSettings(data.settings);
-      if (data.snapshot) setSnapshot(data.snapshot);
-      return data.settings;
+      persistSettings(result.value);
+      recomputeSnapshot(result.value);
+      return result.value;
     },
-    []
+    [persistSettings, recomputeSnapshot]
   );
 
   const updateRule = useCallback(
@@ -220,76 +324,59 @@ export function useMarketData() {
       id: number,
       updates: Partial<Pick<AlertRuleRecord, 'thresholdValue' | 'windowMinutes' | 'cooldownMinutes' | 'enabled'>>
     ) => {
-      const res = await fetch(`/api/rules/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error || 'خطا در بروزرسانی قانون');
+      const existing = rulesRef.current.find((rule) => rule.id === id);
+      if (!existing) {
+        throw new Error('قانون هشدار یافت نشد.');
       }
-      const data = (await res.json()) as { rule: AlertRuleRecord };
-      setRules((prev) => prev.map((r) => (r.id === id ? data.rule : r)));
-      return data.rule;
+
+      const nextThreshold =
+        updates.thresholdValue !== undefined ? Number(updates.thresholdValue) : existing.thresholdValue;
+      if (!Number.isFinite(nextThreshold)) {
+        throw new Error('آستانه عددی نامعتبر است.');
+      }
+
+      const nextWindow =
+        updates.windowMinutes !== undefined ? Number(updates.windowMinutes) : existing.windowMinutes;
+      if (!Number.isFinite(nextWindow) || nextWindow < 1 || nextWindow > 10080) {
+        throw new Error('بازه زمانی باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.');
+      }
+
+      const nextCooldown =
+        updates.cooldownMinutes !== undefined
+          ? Number(updates.cooldownMinutes)
+          : existing.cooldownMinutes;
+      if (!Number.isFinite(nextCooldown) || nextCooldown < 1 || nextCooldown > 10080) {
+        throw new Error('زمان انتظار باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.');
+      }
+
+      const updated: AlertRuleRecord = {
+        ...existing,
+        thresholdValue: nextThreshold,
+        windowMinutes: Math.round(nextWindow),
+        cooldownMinutes: Math.round(nextCooldown),
+        enabled: updates.enabled ?? existing.enabled,
+      };
+
+      persistRules(rulesRef.current.map((rule) => (rule.id === id ? updated : rule)));
+      return updated;
     },
-    []
+    [persistRules]
   );
 
-  const acknowledgeAlert = useCallback(async (id: number) => {
-    await fetch(`/api/alerts/${id}/ack`, { method: 'POST' });
-    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)));
-  }, []);
+  const acknowledgeAlert = useCallback(
+    async (id: number) => {
+      persistAlerts(
+        alertsRef.current.map((alert) =>
+          alert.id === id ? { ...alert, acknowledged: true } : alert
+        )
+      );
+    },
+    [persistAlerts]
+  );
 
   const acknowledgeAllAlerts = useCallback(async () => {
-    await fetch('/api/alerts/ack-all', { method: 'POST' });
-    setAlerts((prev) => prev.map((a) => ({ ...a, acknowledged: true })));
-  }, []);
-
-  const subscribePush = useCallback(async () => {
-    if (!pushSupported) {
-      throw new Error('مرورگر شما از Web Push پشتیبانی نمی‌کند');
-    }
-    const permission = await Notification.requestPermission();
-    setPushPermission(permission);
-    if (permission !== 'granted') {
-      throw new Error('دسترسی ارسال اعلان توسط مرورگر تایید نشد');
-    }
-    const keyRes = await fetch('/api/push/vapid-public-key');
-    const { publicKey } = (await keyRes.json()) as { publicKey: string };
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
-    const jsonSub = sub.toJSON();
-    await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(jsonSub),
-    });
-    setPushSubscribed(true);
-  }, [pushSupported]);
-
-  const unsubscribePush = useCallback(async () => {
-    if (!pushSupported) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      await fetch('/api/push/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: sub.endpoint }),
-      });
-      await sub.unsubscribe();
-    }
-    setPushSubscribed(false);
-  }, [pushSupported]);
-
-  const sendTestPush = useCallback(async () => {
-    const res = await fetch('/api/push/test', { method: 'POST' });
-    return (await res.json()) as { sent: number; failed: number };
-  }, []);
+    persistAlerts(alertsRef.current.map((alert) => ({ ...alert, acknowledged: true })));
+  }, [persistAlerts]);
 
   return {
     snapshot,
@@ -302,17 +389,11 @@ export function useMarketData() {
     loading,
     refreshing,
     error,
-    pushSupported,
-    pushSubscribed,
-    pushPermission,
     refreshNow,
     selectReferenceSource,
     updateSettings,
     updateRule,
     acknowledgeAlert,
     acknowledgeAllAlerts,
-    subscribePush,
-    unsubscribePush,
-    sendTestPush,
   };
 }

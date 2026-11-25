@@ -161,3 +161,14 @@ export interface HistoryResponse {
   points: MeasurementRecord[];
   totalCount: number;
 }
+
+/**
+ * Response of the stateless market endpoint. The browser turns these
+ * collector readings into a MarketSnapshot and persists it locally.
+ */
+export interface MarketApiResponse {
+  tgju: CollectorReading<TgjuRawData>;
+  digikala: CollectorReading<DigikalaRawData>;
+  history?: MeasurementRecord[];
+  serverTime: number;
+}

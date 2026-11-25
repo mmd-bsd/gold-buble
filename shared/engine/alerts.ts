@@ -1,5 +1,25 @@
-import type { AlertRecord, AlertRuleRecord, MeasurementRecord } from '../../shared/types.ts';
-import type { GoldMonitorDatabase } from '../db.ts';
+import type { AlertRecord, AlertRuleRecord, MeasurementRecord } from '../types.ts';
+
+export type NewAlert = Omit<AlertRecord, 'id'>;
+
+export interface AlertRuleUpdate {
+  id: number;
+  lastTriggeredAt: number | null;
+  lastState: string | null;
+}
+
+export interface AlertEvaluationInput {
+  current: MeasurementRecord;
+  /** Measurement history sorted ascending by timestamp; may include `current`. */
+  history: MeasurementRecord[];
+  rules: AlertRuleRecord[];
+  now?: number;
+}
+
+export interface AlertEvaluationResult {
+  alerts: NewAlert[];
+  ruleUpdates: AlertRuleUpdate[];
+}
 
 function formatFaNumber(val: number): string {
   return new Intl.NumberFormat('fa-IR').format(Math.round(val));
@@ -11,26 +31,99 @@ function isInCooldown(rule: AlertRuleRecord, now: number): boolean {
   return elapsedMs < rule.cooldownMinutes * 60 * 1000;
 }
 
-export function evaluateVolatilityRules(
-  db: GoldMonitorDatabase,
-  current: MeasurementRecord,
-  now = Date.now()
-): AlertRecord[] {
-  // Never fire automated volatility alerts on incomplete or unavailable measurements
-  if (current.dataQuality === 'unavailable' || current.referenceMode === 'unresolved') {
-    return [];
+/**
+ * Finds the measurement closest to the start of a rule window, mirroring the
+ * old SQL behaviour: latest record at or before the target, otherwise the
+ * earliest record after it that predates `current`.
+ */
+function findWindowAnchor(
+  history: MeasurementRecord[],
+  targetTimestampMs: number,
+  current: MeasurementRecord
+): MeasurementRecord | null {
+  let latestBefore: MeasurementRecord | null = null;
+  let earliestAfter: MeasurementRecord | null = null;
+
+  for (const m of history) {
+    if (m.id === current.id) continue;
+    if (m.timestamp <= targetTimestampMs) {
+      if (
+        !latestBefore ||
+        m.timestamp > latestBefore.timestamp ||
+        (m.timestamp === latestBefore.timestamp && m.id > latestBefore.id)
+      ) {
+        latestBefore = m;
+      }
+    } else if (m.id < current.id) {
+      if (
+        !earliestAfter ||
+        m.timestamp < earliestAfter.timestamp ||
+        (m.timestamp === earliestAfter.timestamp && m.id < earliestAfter.id)
+      ) {
+        earliestAfter = m;
+      }
+    }
   }
 
-  const rules = db.getRules();
-  const triggeredAlerts: AlertRecord[] = [];
+  return latestBefore ?? earliestAfter;
+}
 
-  for (const rule of rules) {
+function findPreviousMeasurement(
+  history: MeasurementRecord[],
+  current: MeasurementRecord
+): MeasurementRecord | null {
+  let previous: MeasurementRecord | null = null;
+  for (const m of history) {
+    if (m.id >= current.id) continue;
+    if (
+      !previous ||
+      m.timestamp > previous.timestamp ||
+      (m.timestamp === previous.timestamp && m.id > previous.id)
+    ) {
+      previous = m;
+    }
+  }
+  return previous;
+}
+
+/**
+ * Evaluates every enabled volatility rule against a single measurement.
+ *
+ * Unlike the old DB-backed engine this returns alerts and rule-state changes
+ * instead of writing them, so the caller can persist them (browser storage
+ * in the website build). Rules whose window anchor is far older than the
+ * window itself are skipped, which avoids false alerts when the site was
+ * closed for hours or days.
+ */
+export function evaluateVolatilityRules(input: AlertEvaluationInput): AlertEvaluationResult {
+  const { current, history, rules } = input;
+  const now = input.now ?? Date.now();
+
+  // Never fire automated volatility alerts on incomplete or unavailable measurements
+  if (current.dataQuality === 'unavailable' || current.referenceMode === 'unresolved') {
+    return { alerts: [], ruleUpdates: [] };
+  }
+
+  const workingRules = rules.map((rule) => ({ ...rule }));
+  const alerts: NewAlert[] = [];
+  const ruleUpdates: AlertRuleUpdate[] = [];
+
+  const recordState = (rule: AlertRuleRecord): void => {
+    ruleUpdates.push({
+      id: rule.id,
+      lastTriggeredAt: rule.lastTriggeredAt,
+      lastState: rule.lastState,
+    });
+  };
+
+  for (const rule of workingRules) {
     if (!rule.enabled) continue;
 
-    const windowAnchor = db.getMeasurementClosestTo(
-      current.timestamp - rule.windowMinutes * 60 * 1000,
-      current.id
-    );
+    const windowStart = current.timestamp - rule.windowMinutes * 60 * 1000;
+    const anchor = findWindowAnchor(history, windowStart, current);
+    const anchorIsFresh =
+      anchor !== null &&
+      Math.abs(current.timestamp - anchor.timestamp) <= rule.windowMinutes * 2 * 60 * 1000;
 
     const createAlertPayload = (
       title: string,
@@ -38,12 +131,12 @@ export function evaluateVolatilityRules(
       previousValue: number | null,
       changeAmount: number | null,
       newState: string | null = null
-    ): AlertRecord | null => {
+    ): NewAlert | null => {
       if (isInCooldown(rule, now)) {
         return null;
       }
 
-      const saved = db.insertAlert({
+      const alert: NewAlert = {
         ruleId: rule.id,
         ruleType: rule.ruleType,
         title,
@@ -56,29 +149,32 @@ export function evaluateVolatilityRules(
         theoreticalPriceToman: current.theoreticalPriceToman,
         triggeredAt: now,
         acknowledged: false,
-      });
+      };
 
-      db.updateRuleTriggerState(rule.id, now, newState);
-      return saved;
+      rule.lastTriggeredAt = now;
+      rule.lastState = newState;
+      recordState(rule);
+      return alert;
     };
 
     switch (rule.ruleType) {
       case 'bubble_abs_change': {
         if (
+          anchorIsFresh &&
+          anchor &&
           current.bubbleToman !== null &&
-          windowAnchor?.bubbleToman !== null &&
-          windowAnchor?.bubbleToman !== undefined
+          anchor.bubbleToman !== null
         ) {
-          const delta = current.bubbleToman - windowAnchor.bubbleToman;
+          const delta = current.bubbleToman - anchor.bubbleToman;
           if (Math.abs(delta) >= rule.thresholdValue) {
             const direction = delta > 0 ? 'افزایش' : 'کاهش';
             const alert = createAlertPayload(
               `تغییر ${direction}ی حباب طلا`,
               `حباب طلا در ${rule.windowMinutes} دقیقه گذشته به میزان ${formatFaNumber(Math.abs(delta))} تومان ${direction} یافت.`,
-              windowAnchor.bubbleToman,
+              anchor.bubbleToman,
               delta
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           }
         }
         break;
@@ -86,20 +182,22 @@ export function evaluateVolatilityRules(
 
       case 'bubble_pct_change': {
         if (
+          anchorIsFresh &&
+          anchor &&
           current.bubblePercent !== null &&
-          windowAnchor?.bubblePercent !== null &&
-          windowAnchor?.bubblePercent !== undefined
+          anchor.bubblePercent !== null &&
+          anchor.bubblePercent !== undefined
         ) {
-          const deltaPct = Number((current.bubblePercent - windowAnchor.bubblePercent).toFixed(2));
+          const deltaPct = Number((current.bubblePercent - anchor.bubblePercent).toFixed(2));
           if (Math.abs(deltaPct) >= rule.thresholdValue) {
             const direction = deltaPct > 0 ? 'رشد' : 'افت';
             const alert = createAlertPayload(
               `نوسان درصدی حباب (${Math.abs(deltaPct)}٪)`,
               `درصد حباب طلا طی ${rule.windowMinutes} دقیقه اخیر به میزان ${Math.abs(deltaPct)}٪ ${direction} داشت.`,
-              windowAnchor.bubblePercent,
+              anchor.bubblePercent,
               deltaPct
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           }
         }
         break;
@@ -107,20 +205,21 @@ export function evaluateVolatilityRules(
 
       case 'rapid_domestic': {
         if (
+          anchorIsFresh &&
+          anchor &&
           current.referencePriceToman !== null &&
-          windowAnchor?.referencePriceToman !== null &&
-          windowAnchor?.referencePriceToman !== undefined
+          anchor.referencePriceToman !== null
         ) {
-          const delta = current.referencePriceToman - windowAnchor.referencePriceToman;
+          const delta = current.referencePriceToman - anchor.referencePriceToman;
           if (Math.abs(delta) >= rule.thresholdValue) {
             const direction = delta > 0 ? 'افزایش ناگهانی' : 'کاهش ناگهانی';
             const alert = createAlertPayload(
               `${direction} قیمت طلای ۱۸ عیار داخلی`,
               `قیمت مرجع داخلی در ${rule.windowMinutes} دقیقه گذشته ${formatFaNumber(Math.abs(delta))} تومان تغییر کرد.`,
-              windowAnchor.referencePriceToman,
+              anchor.referencePriceToman,
               delta
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           }
         }
         break;
@@ -128,20 +227,21 @@ export function evaluateVolatilityRules(
 
       case 'rapid_theoretical': {
         if (
+          anchorIsFresh &&
+          anchor &&
           current.theoreticalPriceToman !== null &&
-          windowAnchor?.theoreticalPriceToman !== null &&
-          windowAnchor?.theoreticalPriceToman !== undefined
+          anchor.theoreticalPriceToman !== null
         ) {
-          const delta = current.theoreticalPriceToman - windowAnchor.theoreticalPriceToman;
+          const delta = current.theoreticalPriceToman - anchor.theoreticalPriceToman;
           if (Math.abs(delta) >= rule.thresholdValue) {
             const direction = delta > 0 ? 'صعود' : 'نزول';
             const alert = createAlertPayload(
               `تغییر سریع ارزش تئوری طلا`,
               `ارزش ذاتی ۱۸ عیار طی ${rule.windowMinutes} دقیقه به اندازه ${formatFaNumber(Math.abs(delta))} تومان ${direction} کرد.`,
-              windowAnchor.theoreticalPriceToman,
+              anchor.theoreticalPriceToman,
               delta
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           }
         }
         break;
@@ -149,20 +249,21 @@ export function evaluateVolatilityRules(
 
       case 'rapid_usd': {
         if (
+          anchorIsFresh &&
+          anchor &&
           current.usdToman !== null &&
-          windowAnchor?.usdToman !== null &&
-          windowAnchor?.usdToman !== undefined
+          anchor.usdToman !== null
         ) {
-          const delta = current.usdToman - windowAnchor.usdToman;
+          const delta = current.usdToman - anchor.usdToman;
           if (Math.abs(delta) >= rule.thresholdValue) {
             const direction = delta > 0 ? 'افزایش' : 'کاهش';
             const alert = createAlertPayload(
               `نوسان سریع نرخ دلار`,
               `نرخ دلار آزاد در ${rule.windowMinutes} دقیقه گذشته ${formatFaNumber(Math.abs(delta))} تومان ${direction} یافت.`,
-              windowAnchor.usdToman,
+              anchor.usdToman,
               delta
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           }
         }
         break;
@@ -170,20 +271,21 @@ export function evaluateVolatilityRules(
 
       case 'rapid_ounce': {
         if (
+          anchorIsFresh &&
+          anchor &&
           current.globalOunceUsd !== null &&
-          windowAnchor?.globalOunceUsd !== null &&
-          windowAnchor?.globalOunceUsd !== undefined
+          anchor.globalOunceUsd !== null
         ) {
-          const delta = Number((current.globalOunceUsd - windowAnchor.globalOunceUsd).toFixed(2));
+          const delta = Number((current.globalOunceUsd - anchor.globalOunceUsd).toFixed(2));
           if (Math.abs(delta) >= rule.thresholdValue) {
             const direction = delta > 0 ? 'صعود' : 'ریزش';
             const alert = createAlertPayload(
               `تغییر قابل توجه انس جهانی`,
               `انس جهانی طلا طی ${rule.windowMinutes} دقیقه گذشته ${Math.abs(delta)} دلار ${direction} کرد.`,
-              windowAnchor.globalOunceUsd,
+              anchor.globalOunceUsd,
               delta
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           }
         }
         break;
@@ -200,9 +302,10 @@ export function evaluateVolatilityRules(
               current.bubbleToman - rule.thresholdValue,
               'above'
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           } else if (!breached && rule.lastState === 'above') {
-            db.updateRuleTriggerState(rule.id, rule.lastTriggeredAt, 'below');
+            rule.lastState = 'below';
+            recordState(rule);
           }
         }
         break;
@@ -219,9 +322,10 @@ export function evaluateVolatilityRules(
               current.bubbleToman - rule.thresholdValue,
               'below'
             );
-            if (alert) triggeredAlerts.push(alert);
+            if (alert) alerts.push(alert);
           } else if (!breached && rule.lastState === 'below') {
-            db.updateRuleTriggerState(rule.id, rule.lastTriggeredAt, 'above');
+            rule.lastState = 'above';
+            recordState(rule);
           }
         }
         break;
@@ -245,7 +349,7 @@ export function evaluateVolatilityRules(
                 : currentSign === 'negative'
                   ? 'حباب از محدوده مثبت به محدوده منفی سقوط کرد.'
                   : 'حباب دقیقاً به نقطه تعادل صفر رسید.';
-            const prevAnchor = db.getPreviousMeasurement(current.id);
+            const prevAnchor = findPreviousMeasurement(history, current);
             const prevVal = prevAnchor?.bubbleToman ?? 0;
             const alert = createAlertPayload(
               'عبور حباب طلا از مرز صفر',
@@ -254,11 +358,10 @@ export function evaluateVolatilityRules(
               current.bubbleToman - prevVal,
               currentSign
             );
-            if (alert) triggeredAlerts.push(alert);
-          } else if (!prevSign) {
-            db.updateRuleTriggerState(rule.id, rule.lastTriggeredAt, currentSign);
+            if (alert) alerts.push(alert);
           } else if (prevSign !== currentSign) {
-            db.updateRuleTriggerState(rule.id, rule.lastTriggeredAt, currentSign);
+            rule.lastState = currentSign;
+            recordState(rule);
           }
         }
         break;
@@ -266,5 +369,5 @@ export function evaluateVolatilityRules(
     }
   }
 
-  return triggeredAlerts;
+  return { alerts, ruleUpdates };
 }

@@ -56,7 +56,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-2">
-              بازه بروزرسانی خودکار سرور (ثانیه)
+              بازه بروزرسانی خودکار (ثانیه)
             </label>
             <input
               type="number"
@@ -148,7 +148,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         </div>
 
         {/* Toggles */}
-        <div className="pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -157,16 +157,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
               className="w-4 h-4 accent-amber-500"
             />
             <span className="text-xs text-slate-200">میانگین‌گیری خودکار در اختلاف کم</span>
-          </label>
-
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.notificationsEnabled}
-              onChange={(e) => setForm({ ...form, notificationsEnabled: e.target.checked })}
-              className="w-4 h-4 accent-amber-500"
-            />
-            <span className="text-xs text-slate-200">ارسال اعلان‌های پوش پس‌زمینه</span>
           </label>
 
           <label className="flex items-center gap-3 cursor-pointer">
@@ -238,32 +228,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
         </div>
       </form>
 
-      {/* Phase 5: Android PWA Installation & Backup Guide */}
+      {/* Website installation & local storage guide */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <section className="rounded-xl border border-slate-800 bg-[#111827] p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Smartphone className="w-4 h-4 text-amber-400" />
-              <h2 className="text-sm font-semibold text-slate-100">نصب روی اندروید (PWA)</h2>
+              <h2 className="text-sm font-semibold text-slate-100">افزودن به صفحه اصلی موبایل یا دسکتاپ</h2>
             </div>
             <PWAInstallButton compact />
           </div>
           <ol className="text-xs text-slate-300 space-y-2 leading-relaxed list-decimal list-inside">
-            <li>نشانی وب‌اپلیکیشن را در مرورگر Chrome گوشی اندروید باز کنید.</li>
-            <li>دکمه «نصب اپلیکیشن» در بالای صفحه یا گزینه Add to Home Screen منوی کروم را انتخاب کنید.</li>
-            <li>برای دریافت هشدارها حتی هنگام بسته بودن مرورگر، در بخش «هشدارها» گزینه «فعال‌سازی اعلان پوش» را تایید کنید.</li>
+            <li>نشانی وب‌اپلیکیشن را در Chrome (اندروید یا دسکتاپ) باز کنید.</li>
+            <li>دکمه «نصب اپلیکیشن» در بالای صفحه یا گزینه Add to Home Screen / Install App منوی مرورگر را انتخاب کنید.</li>
+            <li>پس از نصب، با یک لمس آیکون برنامه باز می‌شود. بروزرسانی داده‌ها و بررسی هشدارها هنگام باز بودن صفحه انجام می‌شود.</li>
           </ol>
         </section>
 
         <section className="rounded-xl border border-slate-800 bg-[#111827] p-5 space-y-3">
           <div className="flex items-center gap-2">
             <Database className="w-4 h-4 text-sky-400" />
-            <h2 className="text-sm font-semibold text-slate-100">استقرار سرور و پشتیبان‌گیری</h2>
+            <h2 className="text-sm font-semibold text-slate-100">محل ذخیره داده‌ها در نسخه وب</h2>
           </div>
           <ul className="text-xs text-slate-300 space-y-2 leading-relaxed list-disc list-inside">
-            <li>اجرای دائمی سرور پس‌زمینه روی لینوکس/سرور ابری با دستور <code className="font-mono text-amber-300" dir="ltr">npm run build && npm start</code> و مدیریت فرآیند توسط PM2 یا systemd.</li>
-            <li>تمام سوابق تاریخی، قوانین هشدار و تنظیمات در فایل SQLite مسیر <code className="font-mono text-sky-300" dir="ltr">data/gold_monitor.db</code> ذخیره می‌شوند.</li>
-            <li>برای پشتیبان‌گیری روزانه، کپی‌برداری از فایل <code className="font-mono text-slate-200" dir="ltr">data/gold_monitor.db</code> و برای بازیابی، جایگزینی آن پیش از شروع سرور کافی است.</li>
+            <li>این نسخه بدون سرور دائمی و پایگاه داده مرکزی کار می‌کند؛ قیمت‌ها هنگام باز بودن صفحه از منابع دریافت و در همین مرورگر ذخیره می‌شوند.</li>
+            <li>سوابق نمودارها، تنظیمات، قوانین هشدار و تاریخچه هشدارها در حافظه محلی مرورگر (localStorage) نگه‌داری می‌شوند و بین گوشی و دسکتاپ همگام نمی‌شوند.</li>
+            <li>برای بازه‌های بلندمدت، ۴۵ روز داده روزانه TGJU به‌صورت خودکار بارگذاری می‌شود. پاک کردن داده‌های مرورگر این سوابق را حذف می‌کند.</li>
           </ul>
         </section>
       </div>

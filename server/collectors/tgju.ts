@@ -4,7 +4,7 @@ import {
   parseTgjuTehranTimestamp,
   tgjuRialPerGramToToman,
   usdRialToToman,
-} from '../engine/normalization.ts';
+} from '../../shared/engine/normalization.ts';
 
 const TGJU_LIVE_URL = 'https://call1.tgju.org/ajax.json';
 const TGJU_HISTORY_BASE_URL = 'https://api.tgju.org/v1/market/indicator/summary-table-data';
