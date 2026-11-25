@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, LineChart, LayoutDashboard, RefreshCw, Settings } from 'lucide-react';
+import { Bell, Coins, LineChart, LayoutDashboard, RefreshCw, Settings } from 'lucide-react';
 import { useMarketData } from './hooks/useMarketData';
 import { DashboardView } from './components/DashboardView';
 import { ChartsView } from './components/ChartsView';
@@ -36,35 +36,56 @@ export default function App() {
   const navItems: Array<{ key: TabKey; label: string }> = [
     { key: 'dashboard', label: 'داشبورد' },
     { key: 'charts', label: 'نمودارها' },
-    { key: 'alerts', label: unreadAlerts > 0 ? `هشدارها (${new Intl.NumberFormat('fa-IR').format(unreadAlerts)})` : 'هشدارها' },
+    {
+      key: 'alerts',
+      label: unreadAlerts > 0 ? `هشدارها (${new Intl.NumberFormat('fa-IR').format(unreadAlerts)})` : 'هشدارها',
+    },
     { key: 'settings', label: 'تنظیمات' },
   ];
 
+  const mobileNav: Array<{ key: TabKey; label: string; icon: typeof LayoutDashboard }> = [
+    { key: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
+    { key: 'charts', label: 'نمودارها', icon: LineChart },
+    { key: 'alerts', label: 'هشدارها', icon: Bell },
+    { key: 'settings', label: 'تنظیمات', icon: Settings },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-slate-100 pb-20 md:pb-10">
-      {/* Desktop & Mobile Top Bar — Strict 3-Zone Contract */}
-      <header className="sticky top-0 z-30 border-b border-slate-800/90 bg-[#0B0F17]/90 backdrop-blur-md">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-14 md:h-16 flex items-center justify-between gap-8">
-          {/* Zone 1: Single-line Brand Wordmark */}
+    <div className="min-h-screen bg-canvas text-slate-100 pb-24 md:pb-12">
+      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-canvas/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
-            className="text-base md:text-lg font-bold tracking-tight text-amber-300 whitespace-nowrap shrink-0"
+            className="flex shrink-0 items-center gap-2.5"
+            aria-label="پایشگر حباب طلا — داشبورد"
           >
-            پایشگر حباب طلا
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-amber-300 to-amber-600 text-slate-950 shadow-[0_8px_26px_-10px_rgba(245,158,11,0.7)]">
+              <Coins className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            </span>
+            <span className="flex flex-col items-start leading-none">
+              <span className="text-[15px] font-extrabold tracking-tight text-slate-50">
+                حباب <span className="text-amber-300">طلا</span>
+              </span>
+              <span className="mt-1 hidden text-[10.5px] font-medium text-slate-500 sm:block">
+                پایشگر بازار ایران
+              </span>
+            </span>
           </button>
 
-          {/* Zone 2: 4 Single-line Navigation Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-6" aria-label="ناوبری اصلی">
+          <nav
+            className="hidden items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.025] p-1 md:flex"
+            aria-label="ناوبری اصلی"
+          >
             {navItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setActiveTab(item.key)}
-                className={`text-sm font-medium transition-colors whitespace-nowrap shrink-0 py-1 border-b-2 ${
+                className={`rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors ${
                   activeTab === item.key
-                    ? 'text-amber-300 border-amber-400'
-                    : 'text-slate-400 border-transparent hover:text-slate-100'
+                    ? 'bg-amber-400/10 text-amber-200 shadow-[inset_0_0_0_1px_rgba(244,185,66,0.18)]'
+                    : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-100'
                 }`}
               >
                 {item.label}
@@ -72,31 +93,30 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Zone 3: Primary Action */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             <PWAInstallButton compact />
             <button
               type="button"
               onClick={() => void refreshNow()}
               disabled={refreshing}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-400 transition-colors whitespace-nowrap shrink-0 min-h-[40px] disabled:opacity-60"
+              aria-label="بروزرسانی داده‌ها"
+              className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3.5 py-2 text-[13px] font-semibold text-amber-200 transition-colors hover:border-amber-400/40 hover:bg-amber-400/15 disabled:opacity-60"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>بروزرسانی</span>
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">بروزرسانی</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Container */}
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-5 md:py-7">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8">
         {error && (
-          <div className="mb-5 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-xs text-red-300 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-red-400/25 bg-red-500/[0.07] px-4 py-3 text-[13px] text-red-200">
             <span>{error}</span>
             <button
               type="button"
               onClick={() => void refreshNow()}
-              className="underline hover:text-white"
+              className="shrink-0 font-semibold text-red-100 underline underline-offset-4 hover:text-white"
             >
               تلاش مجدد
             </button>
@@ -105,13 +125,13 @@ export default function App() {
 
         {loading && !snapshot ? (
           <div className="space-y-5" aria-busy="true">
-            <div className="h-44 rounded-xl border border-slate-800 bg-[#111827] animate-pulse" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="h-48 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, idx) => (
-                <div key={idx} className="h-32 rounded-xl border border-slate-800 bg-[#111827] animate-pulse" />
+                <div key={idx} className="h-36 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
               ))}
             </div>
-            <div className="h-80 rounded-xl border border-slate-800 bg-[#111827] animate-pulse" />
+            <div className="h-80 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
           </div>
         ) : (
           <>
@@ -154,57 +174,33 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Fixed Bottom Thumb-Zone Tab Bar (<= 15% viewport height, >= 44px touch targets) */}
       <nav
         aria-label="ناوبری موبایل"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-[#0B0F17]/95 backdrop-blur-md"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
       >
-        <div className="grid grid-cols-4 h-16">
-          <button
-            type="button"
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex flex-col items-center justify-center gap-1 min-h-[44px] ${
-              activeTab === 'dashboard' ? 'text-amber-400' : 'text-slate-400'
-            }`}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[11px] font-medium">داشبورد</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('charts')}
-            className={`flex flex-col items-center justify-center gap-1 min-h-[44px] ${
-              activeTab === 'charts' ? 'text-amber-400' : 'text-slate-400'
-            }`}
-          >
-            <LineChart className="w-5 h-5" />
-            <span className="text-[11px] font-medium">نمودارها</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('alerts')}
-            className={`relative flex flex-col items-center justify-center gap-1 min-h-[44px] ${
-              activeTab === 'alerts' ? 'text-amber-400' : 'text-slate-400'
-            }`}
-          >
-            <Bell className="w-5 h-5" />
-            <span className="text-[11px] font-medium">
-              هشدارها{unreadAlerts > 0 ? ` (${new Intl.NumberFormat('fa-IR').format(unreadAlerts)})` : ''}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('settings')}
-            className={`flex flex-col items-center justify-center gap-1 min-h-[44px] ${
-              activeTab === 'settings' ? 'text-amber-400' : 'text-slate-400'
-            }`}
-          >
-            <Settings className="w-5 h-5" />
-            <span className="text-[11px] font-medium">تنظیمات</span>
-          </button>
+        <div className="mx-auto grid h-[68px] max-w-md grid-cols-4">
+          {mobileNav.map(({ key, label, icon: Icon }) => {
+            const active = activeTab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`relative flex min-h-[48px] flex-col items-center justify-center gap-1 transition-colors ${
+                  active ? 'text-amber-300' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {active && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-amber-400" />}
+                <Icon className="h-[21px] w-[21px]" strokeWidth={active ? 2.2 : 1.9} />
+                <span className="text-[10.5px] font-semibold">{label}</span>
+                {key === 'alerts' && unreadAlerts > 0 && (
+                  <span className="absolute right-4 top-2 grid h-4 min-w-4 place-items-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-slate-950">
+                    {new Intl.NumberFormat('fa-IR').format(unreadAlerts)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </nav>
 

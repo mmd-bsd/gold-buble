@@ -30,6 +30,9 @@ const RULE_UNIT_MAP: Record<AlertRuleRecord['ruleType'], string> = {
   zero_cross: 'تومان (صفر)',
 };
 
+const inputCls =
+  'min-h-[42px] w-full rounded-xl border border-white/10 bg-canvas px-2.5 py-2 text-[12px] text-slate-100 tabular-nums placeholder:text-slate-500 focus:border-amber-400/50 disabled:opacity-50';
+
 export const AlertsView: React.FC<AlertsViewProps> = ({
   alerts,
   rules,
@@ -85,86 +88,109 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
+      <div>
+        <h1 className="text-[22px] font-extrabold tracking-tight text-slate-50">هشدارها و قوانین</h1>
+        <p className="mt-1.5 text-[12.5px] leading-6 text-slate-400">
+          تاریخچه هشدارها، پایش درون‌صفحه‌ای و تنظیم آستانه‌های نوسان
+        </p>
+      </div>
+
       {/* In-page monitoring notice */}
-      <section className="rounded-xl border border-slate-800 bg-[#111827] p-5">
+      <section className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.05] p-5">
         <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-amber-400/20 bg-amber-400/10 text-amber-300">
+            <Info className="h-[18px] w-[18px]" />
+          </span>
           <div>
-            <h1 className="text-base font-bold text-slate-100">پایش نوسانات و هشدارهای درون‌صفحه‌ای</h1>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              این نسخه وب است: هنگام باز بودن صفحه، داده‌ها هر چند ثانیه بروزرسانی و قوانین هشدار بررسی می‌شوند. هشدارها، قوانین و تنظیمات در همین مرورگر ذخیره می‌شوند و پس از بستن صفحه اعلان پس‌زمینه ارسال نمی‌شود.
+            <h2 className="text-[14px] font-bold text-slate-50">پایش نوسانات و هشدارهای درون‌صفحه‌ای</h2>
+            <p className="mt-1.5 text-[12.5px] leading-6 text-slate-300">
+              هنگام باز بودن صفحه، داده‌ها هر چند ثانیه بروزرسانی و قوانین هشدار بررسی می‌شوند. هشدارها، قوانین و تنظیمات در همین مرورگر ذخیره می‌شوند و پس از بستن صفحه اعلان پس‌زمینه ارسال نمی‌شود.
             </p>
           </div>
         </div>
       </section>
 
       {/* Triggered Alerts History */}
-      <section className="rounded-xl border border-slate-800 bg-[#111827] p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-slate-100">تاریخچه هشدارهای ثبت‌شده</h2>
-            <span className="text-xs text-slate-400 font-mono-tabular">
-              ({new Intl.NumberFormat('fa-IR').format(unreadCount)} خوانده‌نشده)
+      <section className="space-y-4 rounded-2xl border border-white/[0.07] bg-panel p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-amber-400/15 bg-amber-400/10 text-amber-300">
+              <ShieldAlert className="h-4 w-4" />
+            </span>
+            <h2 className="text-[14px] font-bold text-slate-50">تاریخچه هشدارهای ثبت‌شده</h2>
+            <span className="text-[11.5px] tabular-nums text-slate-500">
+              {new Intl.NumberFormat('fa-IR').format(unreadCount)} خوانده‌نشده
             </span>
           </div>
           {unreadCount > 0 && (
             <button
               type="button"
-              onClick={onAcknowledgeAll}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:text-amber-300 min-h-[36px]"
+              onClick={() => void onAcknowledgeAll()}
+              className="inline-flex min-h-[36px] items-center gap-1.5 text-[12px] font-semibold text-amber-300 transition-colors hover:text-amber-200"
             >
-              <CheckCheck className="w-4 h-4" />
+              <CheckCheck className="h-4 w-4" />
               <span>تایید همه هشدارها</span>
             </button>
           )}
         </div>
 
         {alerts.length === 0 ? (
-          <div className="py-10 text-center text-sm text-slate-500">
+          <div className="py-12 text-center text-[12.5px] text-slate-500">
             هنوز هیچ هشداری ثبت نشده است. با عبور نوسانات بازار از آستانه‌های زیر، هشدارها اینجا نمایش داده می‌شوند.
           </div>
         ) : (
-          <div className="divide-y divide-slate-800/80">
+          <div className="divide-y divide-white/[0.05]">
             {alerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between ${
-                  alert.acknowledged ? 'opacity-65' : ''
+                className={`flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between ${
+                  alert.acknowledged ? 'opacity-60' : ''
                 }`}
               >
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-100">{alert.title}</span>
+                    <span className="text-[13.5px] font-semibold text-slate-100">{alert.title}</span>
                     <span aria-hidden="true" className="text-slate-600">·</span>
-                    <span className="text-xs text-slate-400 font-mono-tabular">
+                    <span className="text-[11px] tabular-nums text-slate-500">
                       {formatPersianDateTime(alert.triggeredAt)}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">{alert.reason}</p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 font-mono-tabular pt-1">
+                  <p className="text-[12px] leading-6 text-slate-400">{alert.reason}</p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-[11px] tabular-nums text-slate-500">
                     <span>
-                      حباب فعلی: <strong className="text-slate-200">{formatToman(alert.bubbleToman, true)} ت</strong> ({formatPercent(alert.bubblePercent, true)})
+                      حباب فعلی:{' '}
+                      <strong className="font-semibold text-slate-300" dir="ltr">
+                        {formatToman(alert.bubbleToman, true)}
+                      </strong>{' '}
+                      <span dir="ltr">{formatPercent(alert.bubblePercent, true)}</span>
                     </span>
                     {alert.previousValue !== null && (
-                      <span>مقدار قبلی: {formatToman(alert.previousValue, true)}</span>
+                      <span>
+                        مقدار قبلی: <span dir="ltr">{formatToman(alert.previousValue, true)}</span>
+                      </span>
                     )}
                     {alert.changeAmount !== null && (
-                      <span>تغییر: {formatToman(alert.changeAmount, true)}</span>
+                      <span>
+                        تغییر: <span dir="ltr">{formatToman(alert.changeAmount, true)}</span>
+                      </span>
                     )}
-                    <span>مرجع: {formatToman(alert.referencePriceToman)} ت</span>
-                    <span>تئوری: {formatToman(alert.theoreticalPriceToman)} ت</span>
+                    <span>
+                      مرجع: <span dir="ltr">{formatToman(alert.referencePriceToman)}</span>
+                    </span>
+                    <span>
+                      تئوری: <span dir="ltr">{formatToman(alert.theoreticalPriceToman)}</span>
+                    </span>
                   </div>
                 </div>
 
                 {!alert.acknowledged && (
                   <button
                     type="button"
-                    onClick={() => onAcknowledgeAlert(alert.id)}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 hover:border-amber-500/50 shrink-0 min-h-[40px]"
+                    onClick={() => void onAcknowledgeAlert(alert.id)}
+                    className="inline-flex min-h-[38px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11.5px] font-medium text-slate-200 transition-colors hover:border-amber-400/40 hover:text-amber-200"
                   >
-                    <Check className="w-3.5 h-3.5" />
+                    <Check className="h-3.5 w-3.5" />
                     <span>تایید</span>
                   </button>
                 )}
@@ -174,78 +200,84 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         )}
       </section>
 
-      {/* Configurable Rules Table */}
-      <section className="rounded-xl border border-slate-800 bg-[#111827] p-5 space-y-4">
+      {/* Configurable Rules */}
+      <section className="space-y-4 rounded-2xl border border-white/[0.07] bg-panel p-5 md:p-6">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">تنظیم قوانین و آستانه‌های هشدار</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            تمام آستانه‌ها، پنجره‌های زمانی و مدت انتظار جلوگیری از تکرار (Cooldown) به صورت زنده قابل تغییر هستند.
+          <h2 className="text-[14px] font-bold text-slate-50">تنظیم قوانین و آستانه‌های هشدار</h2>
+          <p className="mt-1.5 text-[12px] leading-6 text-slate-400">
+            آستانه‌ها، پنجره‌های زمانی و مدت انتظار جلوگیری از تکرار (Cooldown) به صورت زنده قابل تغییر هستند.
           </p>
-          {ruleError && <p className="mt-2 text-xs text-red-400">{ruleError}</p>}
+          {ruleError && <p className="mt-2 text-[11.5px] text-red-300">{ruleError}</p>}
         </div>
 
-        <div className="divide-y divide-slate-800/80">
+        <div className="divide-y divide-white/[0.05]">
+          <div className="hidden grid-cols-12 items-center gap-3 pb-2 lg:grid">
+            <span className="col-span-4 text-[10.5px] font-medium text-slate-500">قانون</span>
+            <span className="col-span-2 text-[10.5px] font-medium text-slate-500">آستانه</span>
+            <span className="col-span-2 text-[10.5px] font-medium text-slate-500">بازه بررسی (دقیقه)</span>
+            <span className="col-span-2 text-[10.5px] font-medium text-slate-500">تکرار مجدد (دقیقه)</span>
+            <span className="col-span-2" />
+          </div>
           {rules.map((rule) => {
             const draft = getDraft(rule);
             return (
-              <div
-                key={rule.id}
-                className="py-4 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center"
-              >
-                <div className="lg:col-span-4 flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={rule.enabled}
-                    onChange={(e) => onUpdateRule(rule.id, { enabled: e.target.checked })}
-                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-                    aria-label={`فعال‌سازی ${rule.name}`}
-                  />
+              <div key={rule.id} className="grid grid-cols-3 items-center gap-2 py-4 lg:grid-cols-12 lg:gap-3">
+                <div className="col-span-3 flex items-center gap-3 lg:col-span-4">
+                  <label className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={rule.enabled}
+                      onChange={(e) => void onUpdateRule(rule.id, { enabled: e.target.checked })}
+                      className="h-4 w-4 cursor-pointer rounded accent-amber-500"
+                      aria-label={`فعال‌سازی ${rule.name}`}
+                    />
+                  </label>
                   <div>
-                    <p className="text-sm font-medium text-slate-200">{rule.name}</p>
-                    <p className="text-xs text-slate-500">واحد: {RULE_UNIT_MAP[rule.ruleType]}</p>
+                    <p className="text-[13px] font-semibold text-slate-200">{rule.name}</p>
+                    <p className="mt-0.5 text-[10.5px] text-slate-500">واحد: {RULE_UNIT_MAP[rule.ruleType]}</p>
                   </div>
                 </div>
 
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] text-slate-400 mb-1">آستانه</label>
+                <div className="col-span-1 lg:col-span-2">
+                  <label className="mb-1 block min-h-[30px] text-[10.5px] font-medium leading-4 text-slate-400 lg:hidden">آستانه</label>
                   <input
                     type="number"
                     step={rule.ruleType === 'bubble_pct_change' ? '0.1' : '1'}
                     value={draft.thresholdValue}
                     disabled={rule.ruleType === 'zero_cross'}
                     onChange={(e) => setDraftField(rule, 'thresholdValue', e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-2.5 py-2 text-xs text-slate-100 font-mono-tabular disabled:opacity-50"
+                    className={inputCls}
                   />
                 </div>
 
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] text-slate-400 mb-1">بازه بررسی (دقیقه)</label>
+                <div className="col-span-1 lg:col-span-2">
+                  <label className="mb-1 block min-h-[30px] text-[10.5px] font-medium leading-4 text-slate-400 lg:hidden">بازه بررسی (دقیقه)</label>
                   <input
                     type="number"
                     min={1}
                     value={draft.windowMinutes}
                     onChange={(e) => setDraftField(rule, 'windowMinutes', e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-2.5 py-2 text-xs text-slate-100 font-mono-tabular"
+                    className={inputCls}
                   />
                 </div>
 
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] text-slate-400 mb-1">تکرار مجدد (دقیقه)</label>
+                <div className="col-span-1 lg:col-span-2">
+                  <label className="mb-1 block min-h-[30px] text-[10.5px] font-medium leading-4 text-slate-400 lg:hidden">تکرار مجدد (دقیقه)</label>
                   <input
                     type="number"
                     min={1}
                     value={draft.cooldownMinutes}
                     onChange={(e) => setDraftField(rule, 'cooldownMinutes', e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-[#0B0F17] px-2.5 py-2 text-xs text-slate-100 font-mono-tabular"
+                    className={inputCls}
                   />
                 </div>
 
-                <div className="lg:col-span-2 flex justify-end">
+                <div className="col-span-3 flex justify-end lg:col-span-2">
                   <button
                     type="button"
                     disabled={savingRuleId === rule.id}
-                    onClick={() => handleSaveRule(rule)}
-                    className="w-full lg:w-auto px-4 py-2 rounded-lg border border-amber-500/40 bg-amber-500/15 text-xs font-medium text-amber-300 hover:bg-amber-500/25 transition-colors min-h-[38px]"
+                    onClick={() => void handleSaveRule(rule)}
+                    className="min-h-[42px] w-auto min-w-[120px] rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2 text-[11.5px] font-semibold text-slate-300 transition-colors hover:border-amber-400/30 hover:text-amber-200 disabled:opacity-60"
                   >
                     {savingRuleId === rule.id ? 'در حال ذخیره...' : 'ذخیره قانون'}
                   </button>

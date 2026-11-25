@@ -55,6 +55,13 @@ export function formatUsd(value: number | null | undefined): string {
   return `${faDecimalFormatter.format(value)} دلار`;
 }
 
+export function formatUsdNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 'ناموجود';
+  }
+  return faDecimalFormatter.format(value);
+}
+
 export function formatPercent(value: number | null | undefined, showSign = true): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return '—';
