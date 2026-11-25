@@ -1,19 +1,64 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GoldMonitorDatabase } from '../server/db.ts';
+import { seedRules } from '../shared/defaults.ts';
+import { evaluateVolatilityRules } from '../shared/engine/alerts.ts';
 import {
   calculateBubble,
   calculateTheoretical18KToman,
   resolveReferencePrice,
-} from '../server/engine/calculator.ts';
+} from '../shared/engine/calculator.ts';
 import {
   digikalaRialPerMgToTomanPerGram,
   parsePositiveNumeric,
   parseTgjuTehranTimestamp,
   tgjuRialPerGramToToman,
   usdRialToToman,
-} from '../server/engine/normalization.ts';
-import { evaluateVolatilityRules } from '../server/engine/volatility.ts';
+} from '../shared/engine/normalization.ts';
+import type { AlertRuleUpdate, AlertEvaluationResult } from '../shared/engine/alerts.ts';
+import type { AlertRuleRecord, MeasurementRecord } from '../shared/types.ts';
+
+function applyRuleUpdates(
+  rules: AlertRuleRecord[],
+  updates: AlertRuleUpdate[]
+): AlertRuleRecord[] {
+  const byId = new Map(updates.map((u) => [u.id, u]));
+  return rules.map((rule) => {
+    const update = byId.get(rule.id);
+    return update
+      ? { ...rule, lastTriggeredAt: update.lastTriggeredAt, lastState: update.lastState }
+      : rule;
+  });
+}
+
+function makeMeasurement(
+  overrides: Partial<MeasurementRecord> & { timestamp: number }
+): MeasurementRecord {
+  return {
+    id: overrides.timestamp,
+    usdIrr: 2_800_000,
+    usdToman: 280_000,
+    globalOunceUsd: 3500,
+    tgjuGold18Toman: 24_000_000,
+    digikalaGold18Toman: 24_000_000,
+    referencePriceToman: 24_000_000,
+    referenceMode: 'averaged',
+    theoreticalPriceToman: 23_800_000,
+    bubbleToman: 200_000,
+    bubblePercent: 0.84,
+    discrepancyToman: 0,
+    discrepancyExceeded: false,
+    dataQuality: 'live',
+    tgjuStatus: 'live',
+    digikalaStatus: 'live',
+    tgjuSourceTs: null,
+    digikalaSourceTs: null,
+    ...overrides,
+  };
+}
+
+function alertTypes(result: AlertEvaluationResult): Set<string> {
+  return new Set(result.alerts.map((a) => a.ruleType));
+}
 
 test('Currency & unit normalization (Rial/Toman, mg/gram, Persian numerals)', () => {
   assert.equal(parsePositiveNumeric('2,876,000'), 2876000);
@@ -148,85 +193,69 @@ test('Unavailable source handling falls back cleanly or stays null without silen
 });
 
 test('Volatility engine triggers alerts on threshold/zero-cross and prevents duplicate spam via cooldown', () => {
-  const db = new GoldMonitorDatabase(':memory:');
   const baseTime = 1_764_000_000_000;
+  let rules = seedRules();
 
-  // Seed initial positive measurement
-  const first = db.insertMeasurement({
-    timestamp: baseTime,
-    usdIrr: 2_800_000,
-    usdToman: 280_000,
-    globalOunceUsd: 3500,
-    tgjuGold18Toman: 24_000_000,
-    digikalaGold18Toman: 24_000_000,
-    referencePriceToman: 24_000_000,
-    referenceMode: 'averaged',
-    theoreticalPriceToman: 23_800_000,
-    bubbleToman: 200_000,
-    bubblePercent: 0.84,
-    discrepancyToman: 0,
-    discrepancyExceeded: false,
-    dataQuality: 'live',
-    tgjuStatus: 'live',
-    digikalaStatus: 'live',
-    tgjuSourceTs: null,
-    digikalaSourceTs: null,
-  }).record;
+  const first = makeMeasurement({ timestamp: baseTime });
+  const firstEval = evaluateVolatilityRules({ current: first, history: [first], rules, now: baseTime });
+  assert.equal(firstEval.alerts.length, 0);
+  rules = applyRuleUpdates(rules, firstEval.ruleUpdates);
 
-  evaluateVolatilityRules(db, first, baseTime);
-
-  // Drop bubble sharply to negative (-400,000 Toman) 5 minutes later -> triggers bubble_abs_change, threshold_low, zero_cross, etc.
-  const second = db.insertMeasurement({
+  // Drop bubble sharply to negative (-400,000 Toman) 5 minutes later
+  const second = makeMeasurement({
     timestamp: baseTime + 5 * 60 * 1000,
-    usdIrr: 2_800_000,
-    usdToman: 280_000,
-    globalOunceUsd: 3500,
     tgjuGold18Toman: 23_400_000,
     digikalaGold18Toman: 23_400_000,
     referencePriceToman: 23_400_000,
-    referenceMode: 'averaged',
-    theoreticalPriceToman: 23_800_000,
     bubbleToman: -400_000,
     bubblePercent: -1.68,
-    discrepancyToman: 0,
-    discrepancyExceeded: false,
-    dataQuality: 'live',
-    tgjuStatus: 'live',
-    digikalaStatus: 'live',
-    tgjuSourceTs: null,
-    digikalaSourceTs: null,
-  }).record;
+  });
 
-  const triggered = evaluateVolatilityRules(db, second, baseTime + 5 * 60 * 1000);
-  const triggeredTypes = new Set(triggered.map((a) => a.ruleType));
-  assert.ok(triggeredTypes.has('bubble_abs_change'));
-  assert.ok(triggeredTypes.has('threshold_low'));
-  assert.ok(triggeredTypes.has('zero_cross'));
+  const secondEval = evaluateVolatilityRules({
+    current: second,
+    history: [first, second],
+    rules,
+    now: second.timestamp,
+  });
+  const secondTypes = alertTypes(secondEval);
+  assert.ok(secondTypes.has('bubble_abs_change'));
+  assert.ok(secondTypes.has('threshold_low'));
+  assert.ok(secondTypes.has('zero_cross'));
+  rules = applyRuleUpdates(rules, secondEval.ruleUpdates);
 
   // 1 minute later, same negative regime -> cooldown must block duplicates
-  const third = db.insertMeasurement({
+  const third = makeMeasurement({
     timestamp: baseTime + 6 * 60 * 1000,
-    usdIrr: 2_800_000,
-    usdToman: 280_000,
-    globalOunceUsd: 3500,
     tgjuGold18Toman: 23_350_000,
     digikalaGold18Toman: 23_350_000,
     referencePriceToman: 23_350_000,
-    referenceMode: 'averaged',
-    theoreticalPriceToman: 23_800_000,
     bubbleToman: -450_000,
     bubblePercent: -1.89,
-    discrepancyToman: 0,
-    discrepancyExceeded: false,
-    dataQuality: 'live',
-    tgjuStatus: 'live',
-    digikalaStatus: 'live',
-    tgjuSourceTs: null,
-    digikalaSourceTs: null,
-  }).record;
+  });
 
-  const duplicateCheck = evaluateVolatilityRules(db, third, baseTime + 6 * 60 * 1000);
-  assert.equal(duplicateCheck.length, 0);
+  const thirdEval = evaluateVolatilityRules({
+    current: third,
+    history: [first, second, third],
+    rules,
+    now: third.timestamp,
+  });
+  assert.equal(thirdEval.alerts.length, 0);
+});
 
-  db.close();
+test('Window rules skip anchors that are far older than the rule window', () => {
+  const now = 1_764_100_000_000;
+  const old = makeMeasurement({
+    timestamp: now - 3 * 24 * 60 * 60 * 1000,
+    bubbleToman: 0,
+  });
+  const current = makeMeasurement({ timestamp: now, bubbleToman: 2_000_000 });
+
+  const result = evaluateVolatilityRules({
+    current,
+    history: [old, current],
+    rules: seedRules(),
+    now,
+  });
+
+  assert.equal(result.alerts.some((a) => a.ruleType === 'bubble_abs_change'), false);
 });

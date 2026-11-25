@@ -1,4 +1,4 @@
-import type { BubbleSign, PreferredSource, ReferenceMode } from '../../shared/types.ts';
+import type { BubbleSign, PreferredSource, ReferenceMode } from '../types.ts';
 
 // 31.1034768 grams per troy ounce = 311034768 / 10_000_000
 const TROY_OUNCE_NUM = 311_034_768n;
