@@ -11,10 +11,12 @@ import {
 import { Maximize2 } from 'lucide-react';
 import type { ChartRange, MeasurementRecord } from '../../shared/types.ts';
 import {
+  formatCompactNumber,
   formatPercent,
   formatPersianDateTime,
   formatToman,
   formatUsd,
+  formatUsdNumber,
 } from '../utils/formatters';
 
 export type ChartMode =
@@ -25,19 +27,21 @@ export type ChartMode =
   | 'ounce_usd';
 
 const RANGE_OPTIONS: Array<{ key: ChartRange; label: string }> = [
-  { key: '1h', label: '۱ ساعت' },
-  { key: '6h', label: '۶ ساعت' },
-  { key: '12h', label: '۱۲ ساعت' },
-  { key: '24h', label: '۲۴ ساعت' },
-  { key: '7d', label: '۷ روز' },
-  { key: '30d', label: '۳۰ روز' },
-  { key: 'all', label: 'کل تاریخچه' },
+  { key: '1h', label: '1 ساعت' },
+  { key: '6h', label: '6 ساعت' },
+  { key: '12h', label: '12 ساعت' },
+  { key: '24h', label: '24 ساعت' },
+  { key: '7d', label: '7 روز' },
+  { key: '30d', label: '30 روز' },
+  { key: '1y', label: '1 سال' },
+  { key: '2y', label: '2 سال' },
+  { key: 'all', label: 'همه' },
 ];
 
 const CHART_MODE_OPTIONS: Array<{ key: ChartMode; label: string }> = [
   { key: 'bubble_toman', label: 'حباب طلا (تومان)' },
   { key: 'comparison', label: 'داخلی در برابر تئوری' },
-  { key: 'bubble_percent', label: 'درصد حباب (٪)' },
+  { key: 'bubble_percent', label: 'درصد حباب (%)' },
   { key: 'usd_toman', label: 'نرخ دلار (تومان)' },
   { key: 'ounce_usd', label: 'انس جهانی (دلار)' },
 ];
@@ -70,6 +74,18 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [hoverInfo, setHoverInfo] = useState<TooltipInfo | null>(null);
+  const [isPhone, setIsPhone] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsPhone(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  // Keep the whole dashboard close to one phone screen.
+  const chartHeight = isPhone ? Math.min(height, 210) : height;
 
   const sanitizedPoints = useMemo(() => {
     const bySec = new Map<number, MeasurementRecord>();
@@ -86,12 +102,13 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
     const el = containerRef.current;
     if (!el) return;
 
-    const isLongRange = range === '7d' || range === '30d' || range === 'all';
-    const axisDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+    const isLongRange =
+      range === '7d' || range === '30d' || range === '1y' || range === '2y' || range === 'all';
+    const axisDateFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {
       month: '2-digit',
       day: '2-digit',
     });
-    const axisTimeFormat = new Intl.DateTimeFormat('fa-IR', {
+    const axisTimeFormat = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -99,7 +116,7 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
 
     const chart = createChart(el, {
       width: el.clientWidth,
-      height,
+      height: chartHeight,
       layout: {
         background: { type: ColorType.Solid, color: '#0D1420' },
         textColor: '#94A3B8',
@@ -130,14 +147,14 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
         horzLine: { color: 'rgba(244, 185, 66, 0.35)', width: 1, style: LineStyle.Dashed },
       },
       localization: {
-        locale: 'fa-IR',
+        locale: 'en-US',
         priceFormatter: (price: number) => {
           if (mode === 'bubble_percent') return `${price.toFixed(2)}%`;
-          if (mode === 'ounce_usd') return `$${price.toFixed(1)}`;
-          return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(Math.round(price));
+          if (mode === 'ounce_usd') return `$${formatUsdNumber(price)}`;
+          return formatCompactNumber(price);
         },
         timeFormatter: (time: number) =>
-          new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+          new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {
             month: '2-digit',
             day: '2-digit',
             hour: '2-digit',
@@ -184,7 +201,7 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: 'تعادل (۰)',
+        title: 'تعادل (0)',
       });
 
       chart.subscribeCrosshairMove((param) => {
@@ -295,15 +312,15 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
       chart.remove();
       chartRef.current = null;
     };
-  }, [sanitizedPoints, mode, height, range]);
+  }, [sanitizedPoints, mode, chartHeight, range]);
 
   const handleFitContent = () => {
     chartRef.current?.timeScale().fitContent();
   };
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-panel p-4 md:p-5">
-      <div className="flex flex-col gap-3 border-b border-white/[0.06] pb-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="rounded-2xl border border-white/[0.07] bg-panel p-3 md:p-5">
+      <div className="flex flex-col gap-2 border-b border-white/[0.06] pb-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-3 lg:pb-4">
         <div className="no-scrollbar -mx-1 flex min-w-0 items-center gap-1.5 overflow-x-auto px-1">
           {showModeTabs && onModeChange ? (
             CHART_MODE_OPTIONS.map((opt) => (
@@ -357,7 +374,7 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
       </div>
 
       {/* Live crosshair summary strip */}
-      <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[11.5px] text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 py-2 text-[11px] text-slate-400 lg:py-3 lg:text-[11.5px]">
         {hoverInfo ? (
           <div className="flex flex-wrap items-center gap-3 tabular-nums">
             <span className="text-slate-300">{formatPersianDateTime(hoverInfo.timeMs)}</span>
@@ -405,13 +422,13 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
           </div>
         )}
         <span className="tabular-nums text-slate-500">
-          {new Intl.NumberFormat('fa-IR').format(sanitizedPoints.length)} نقطه
+          {new Intl.NumberFormat('en-US').format(sanitizedPoints.length)} نقطه
         </span>
       </div>
 
       {sanitizedPoints.length < 2 ? (
         <div
-          style={{ height }}
+          style={{ height: chartHeight }}
           className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-canvas/40 p-6 text-center"
         >
           <p className="text-[13px] font-semibold text-slate-200">
@@ -419,7 +436,7 @@ export const BubbleChartPanel: React.FC<BubbleChartPanelProps> = ({
           </p>
           <p className="mt-2 max-w-sm text-[11.5px] leading-6 text-slate-500">
             {sanitizedPoints.length === 0
-              ? 'با باز ماندن صفحه، داده‌ها هر چند ثانیه بروزرسانی و روند نمودار ساخته می‌شود. برای بازه‌های بلندمدت، ۴۵ روز داده روزانه هم بارگذاری می‌شود.'
+              ? 'با باز ماندن صفحه، داده‌ها هر چند ثانیه بروزرسانی و روند نمودار ساخته می‌شود. برای بازه‌های بلندمدت، تا 2 سال داده روزانه هم بارگذاری می‌شود.'
               : 'برای رسم خط روند حداقل دو اندازه‌گیری لازم است. کمی صبر کنید یا بازه زمانی دیگری را انتخاب کنید.'}
           </p>
         </div>

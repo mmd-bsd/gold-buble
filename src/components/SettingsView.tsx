@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Database, Save, Smartphone } from 'lucide-react';
-import type { AppSettings, ChartRange, PreferredSource } from '../../shared/types.ts';
+import type { AppSettings, ChartRange, PreferredSource, UsdRateSource } from '../../shared/types.ts';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsViewProps {
@@ -69,7 +69,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
 
       <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-white/[0.07] bg-panel p-5 md:p-6">
         <div className="grid grid-cols-1 gap-x-8 gap-y-5 lg:grid-cols-2">
-          <Field label="بازه بروزرسانی خودکار (ثانیه)" hint="حداقل ۱۰ ثانیه، پیشنهاد: ۳۰ ثانیه">
+          <Field label="بازه بروزرسانی خودکار (ثانیه)" hint="حداقل 10 ثانیه، پیشنهاد: 30 ثانیه">
             <input
               type="number"
               min={10}
@@ -80,7 +80,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             />
           </Field>
 
-          <Field label="آستانه اختلاف منابع داخلی (تومان)" hint="مقدار پیش‌فرض: ۱۰۰٬۰۰۰ تومان">
+          <Field label="آستانه اختلاف منابع داخلی (تومان)" hint="مقدار پیش‌فرض: 100,000 تومان">
             <input
               type="number"
               min={0}
@@ -91,7 +91,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             />
           </Field>
 
-          <Field label="منبع ترجیحی قیمت طلای ۱۸ عیار داخلی">
+          <Field label="منبع ترجیحی قیمت طلای 18 عیار داخلی">
             <select
               value={form.preferredSource}
               onChange={(e) => setForm({ ...form, preferredSource: e.target.value as PreferredSource })}
@@ -103,23 +103,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             </select>
           </Field>
 
+          <Field
+            label="مبنای نرخ ارز در ارزش تئوری"
+            hint="دلار آزاد TGJU یا تتر (USDT) — قیمت هر دو از TGJU خوانده می‌شود"
+          >
+            <select
+              value={form.usdRateSource}
+              onChange={(e) => setForm({ ...form, usdRateSource: e.target.value as UsdRateSource })}
+              className={controlCls}
+            >
+              <option value="dollar">دلار آزاد TGJU</option>
+              <option value="tether">تتر (USDT)</option>
+            </select>
+          </Field>
+
           <Field label="بازه زمانی پیش‌فرض نمودارها">
             <select
               value={form.defaultChartRange}
               onChange={(e) => setForm({ ...form, defaultChartRange: e.target.value as ChartRange })}
               className={controlCls}
             >
-              <option value="1h">۱ ساعت</option>
-              <option value="6h">۶ ساعت</option>
-              <option value="12h">۱۲ ساعت</option>
-              <option value="24h">۲۴ ساعت</option>
-              <option value="7d">۷ روز</option>
-              <option value="30d">۳۰ روز</option>
+              <option value="1h">1 ساعت</option>
+              <option value="6h">6 ساعت</option>
+              <option value="12h">12 ساعت</option>
+              <option value="24h">24 ساعت</option>
+              <option value="7d">7 روز</option>
+              <option value="30d">30 روز</option>
+              <option value="1y">1 سال</option>
+              <option value="2y">2 سال</option>
               <option value="all">کل تاریخچه</option>
             </select>
           </Field>
 
-          <Field label="آستانه تشخیص داده قدیمی / تاخیر (ثانیه)" hint="پیش‌فرض: ۳۰۰ ثانیه">
+          <Field label="آستانه تشخیص داده قدیمی / تاخیر (ثانیه)" hint="پیش‌فرض: 300 ثانیه">
             <input
               type="number"
               min={30}
@@ -130,7 +146,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
             />
           </Field>
 
-          <Field label="محدوده خنثی / نزدیک به صفر (تومان)" hint="پیش‌فرض: ۲۵٬۰۰۰ تومان">
+          <Field label="محدوده خنثی / نزدیک به صفر (تومان)" hint="پیش‌فرض: 25,000 تومان">
             <input
               type="number"
               min={0}
@@ -182,7 +198,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           {form.manualOverrideEnabled && (
             <div className="max-w-sm rounded-xl border border-amber-400/20 bg-amber-400/[0.04] p-4">
               <label className="mb-1.5 block text-[11.5px] text-slate-300">
-                قیمت دستی هر گرم طلای ۱۸ عیار (تومان)
+                قیمت دستی هر گرم طلای 18 عیار (تومان)
               </label>
               <input
                 type="number"
@@ -195,7 +211,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                     manualOverridePriceToman: e.target.value ? Number(e.target.value) : null,
                   })
                 }
-                placeholder="مثال: ۲۵۵۰۰۰۰۰"
+                placeholder="مثال: 25500000"
                 className={`${controlCls} border-amber-400/30`}
               />
             </div>
@@ -252,7 +268,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
           <ul className="list-inside list-disc space-y-2 text-[11.5px] leading-6 text-slate-400">
             <li>این نسخه بدون سرور دائمی و پایگاه داده مرکزی کار می‌کند؛ قیمت‌ها هنگام باز بودن صفحه از منابع دریافت و در همین مرورگر ذخیره می‌شوند.</li>
             <li>سوابق نمودارها، تنظیمات، قوانین هشدار و تاریخچه هشدارها در حافظه محلی مرورگر (localStorage) نگه‌داری می‌شوند و بین گوشی و دسکتاپ همگام نمی‌شوند.</li>
-            <li>برای بازه‌های بلندمدت، ۴۵ روز داده روزانه TGJU به‌صورت خودکار بارگذاری می‌شود. پاک کردن داده‌های مرورگر این سوابق را حذف می‌کند.</li>
+            <li>برای بازه‌های بلندمدت، تا 2 سال داده روزانه TGJU به‌صورت خودکار بارگذاری می‌شود. پاک کردن داده‌های مرورگر این سوابق را حذف می‌کند.</li>
           </ul>
         </section>
       </div>

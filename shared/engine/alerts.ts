@@ -21,8 +21,14 @@ export interface AlertEvaluationResult {
   ruleUpdates: AlertRuleUpdate[];
 }
 
+const compactNumberFormatter = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/** Latin-digit compact amount used inside Persian alert sentences. */
 function formatFaNumber(val: number): string {
-  return new Intl.NumberFormat('fa-IR').format(Math.round(val));
+  return compactNumberFormatter.format(Math.round(val));
 }
 
 function isInCooldown(rule: AlertRuleRecord, now: number): boolean {
@@ -192,8 +198,8 @@ export function evaluateVolatilityRules(input: AlertEvaluationInput): AlertEvalu
           if (Math.abs(deltaPct) >= rule.thresholdValue) {
             const direction = deltaPct > 0 ? 'رشد' : 'افت';
             const alert = createAlertPayload(
-              `نوسان درصدی حباب (${Math.abs(deltaPct)}٪)`,
-              `درصد حباب طلا طی ${rule.windowMinutes} دقیقه اخیر به میزان ${Math.abs(deltaPct)}٪ ${direction} داشت.`,
+              `نوسان درصدی حباب (${Math.abs(deltaPct)}%)`,
+              `درصد حباب طلا طی ${rule.windowMinutes} دقیقه اخیر به میزان ${Math.abs(deltaPct)}% ${direction} داشت.`,
               anchor.bubblePercent,
               deltaPct
             );
@@ -214,7 +220,7 @@ export function evaluateVolatilityRules(input: AlertEvaluationInput): AlertEvalu
           if (Math.abs(delta) >= rule.thresholdValue) {
             const direction = delta > 0 ? 'افزایش ناگهانی' : 'کاهش ناگهانی';
             const alert = createAlertPayload(
-              `${direction} قیمت طلای ۱۸ عیار داخلی`,
+              `${direction} قیمت طلای 18 عیار داخلی`,
               `قیمت مرجع داخلی در ${rule.windowMinutes} دقیقه گذشته ${formatFaNumber(Math.abs(delta))} تومان تغییر کرد.`,
               anchor.referencePriceToman,
               delta
@@ -237,7 +243,7 @@ export function evaluateVolatilityRules(input: AlertEvaluationInput): AlertEvalu
             const direction = delta > 0 ? 'صعود' : 'نزول';
             const alert = createAlertPayload(
               `تغییر سریع ارزش تئوری طلا`,
-              `ارزش ذاتی ۱۸ عیار طی ${rule.windowMinutes} دقیقه به اندازه ${formatFaNumber(Math.abs(delta))} تومان ${direction} کرد.`,
+              `ارزش ذاتی 18 عیار طی ${rule.windowMinutes} دقیقه به اندازه ${formatFaNumber(Math.abs(delta))} تومان ${direction} کرد.`,
               anchor.theoreticalPriceToman,
               delta
             );

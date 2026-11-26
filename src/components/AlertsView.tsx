@@ -20,7 +20,7 @@ interface AlertsViewProps {
 
 const RULE_UNIT_MAP: Record<AlertRuleRecord['ruleType'], string> = {
   bubble_abs_change: 'تومان',
-  bubble_pct_change: 'درصد (٪)',
+  bubble_pct_change: 'درصد (%)',
   rapid_domestic: 'تومان',
   rapid_theoretical: 'تومان',
   rapid_usd: 'تومان',
@@ -120,7 +120,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             </span>
             <h2 className="text-[14px] font-bold text-slate-50">تاریخچه هشدارهای ثبت‌شده</h2>
             <span className="text-[11.5px] tabular-nums text-slate-500">
-              {new Intl.NumberFormat('fa-IR').format(unreadCount)} خوانده‌نشده
+              {new Intl.NumberFormat('en-US').format(unreadCount)} خوانده‌نشده
             </span>
           </div>
           {unreadCount > 0 && (

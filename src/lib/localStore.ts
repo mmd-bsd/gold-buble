@@ -8,7 +8,7 @@ const KEY_LIVE = 'goldbubble:measurements:v1';
 const KEY_BACKFILL = 'goldbubble:backfill:v1';
 
 export const MAX_LIVE_MEASUREMENTS = 5000;
-export const MAX_BACKFILL_MEASUREMENTS = 60;
+export const MAX_BACKFILL_MEASUREMENTS = 800;
 export const MAX_ALERTS = 200;
 
 function readJson(key: string): unknown {

@@ -1,6 +1,6 @@
 import { calculateBubble, calculateTheoretical18KToman } from './engine/calculator.ts';
 import { tgjuRialPerGramToToman, usdRialToToman } from './engine/normalization.ts';
-import type { MeasurementRecord } from './types.ts';
+import type { MeasurementRecord, UsdRateSource } from './types.ts';
 
 export interface DailySeriesPoint {
   dateGregorian: string;
@@ -10,12 +10,16 @@ export interface DailySeriesPoint {
 
 /**
  * Joins TGJU daily USD, gold18 and global ounce series into backfill
- * measurements. Only dates where all three inputs exist are used.
+ * measurements. Only dates where all required inputs exist are used.
+ * When `rateSource` is `tether`, the tether series feeds the theoretical
+ * price and the dollar series is used for any day missing tether data.
  */
 export function buildBackfillMeasurements(
   usdHist: DailySeriesPoint[],
   goldHist: DailySeriesPoint[],
-  onsHist: DailySeriesPoint[]
+  onsHist: DailySeriesPoint[],
+  tetherHist: DailySeriesPoint[] = [],
+  rateSource: UsdRateSource = 'dollar'
 ): MeasurementRecord[] {
   if (usdHist.length === 0 || goldHist.length === 0 || onsHist.length === 0) {
     return [];
@@ -23,6 +27,7 @@ export function buildBackfillMeasurements(
 
   const usdMap = new Map(usdHist.map((d) => [d.dateGregorian, d]));
   const onsMap = new Map(onsHist.map((d) => [d.dateGregorian, d]));
+  const tetherMap = new Map(tetherHist.map((d) => [d.dateGregorian, d]));
   const records: MeasurementRecord[] = [];
 
   for (const goldDay of goldHist) {
@@ -30,7 +35,11 @@ export function buildBackfillMeasurements(
     const onsDay = onsMap.get(goldDay.dateGregorian);
     if (!usdDay || !onsDay) continue;
 
-    const theo = calculateTheoretical18KToman(onsDay.closeValue, usdDay.closeValue);
+    const tetherDay = tetherMap.get(goldDay.dateGregorian) ?? null;
+    const useTether = rateSource === 'tether' && tetherDay !== null;
+    const rateIrr = useTether ? (tetherDay as DailySeriesPoint).closeValue : usdDay.closeValue;
+
+    const theo = calculateTheoretical18KToman(onsDay.closeValue, rateIrr);
     const tgjuGoldToman = tgjuRialPerGramToToman(goldDay.closeValue);
     const bubble = calculateBubble(tgjuGoldToman, theo.roundedToman);
 
@@ -39,6 +48,11 @@ export function buildBackfillMeasurements(
       timestamp: goldDay.timestampMs,
       usdIrr: usdDay.closeValue,
       usdToman: usdRialToToman(usdDay.closeValue),
+      usdtIrr: tetherDay?.closeValue ?? null,
+      usdtToman: tetherDay ? usdRialToToman(tetherDay.closeValue) : null,
+      // Label the requested basis (not the per-day fallback) so the client can
+      // tell when a refetch is needed after switching the rate source.
+      usdRateSource: rateSource,
       globalOunceUsd: onsDay.closeValue,
       tgjuGold18Toman: tgjuGoldToman,
       digikalaGold18Toman: null,

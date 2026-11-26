@@ -1,4 +1,4 @@
-import type { AlertRuleRecord, AppSettings, ChartRange, PreferredSource } from './types.ts';
+import type { AlertRuleRecord, AppSettings, ChartRange, PreferredSource, UsdRateSource } from './types.ts';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   refreshIntervalSec: 30,
@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultChartRange: '24h',
   manualOverrideEnabled: false,
   manualOverridePriceToman: null,
+  usdRateSource: 'dollar',
   notificationsEnabled: true,
   soundAlertsEnabled: true,
   nearZeroBandToman: 25_000,
@@ -34,7 +35,7 @@ export const DEFAULT_RULES: ReadonlyArray<
     enabled: true,
   },
   {
-    name: 'جهش سریع طلای ۱۸ عیار داخلی',
+    name: 'جهش سریع طلای 18 عیار داخلی',
     ruleType: 'rapid_domestic',
     thresholdValue: 300_000,
     windowMinutes: 15,
@@ -107,6 +108,8 @@ export const VALID_RANGES: ReadonlySet<ChartRange> = new Set<ChartRange>([
   '24h',
   '7d',
   '30d',
+  '1y',
+  '2y',
   'all',
 ]);
 
@@ -114,6 +117,11 @@ export const VALID_SOURCES: ReadonlySet<PreferredSource> = new Set<PreferredSour
   'auto',
   'tgju',
   'digikala',
+]);
+
+export const VALID_RATE_SOURCES: ReadonlySet<UsdRateSource> = new Set<UsdRateSource>([
+  'dollar',
+  'tether',
 ]);
 
 export interface SettingsValidation {
@@ -135,7 +143,7 @@ export function mergeAndValidateSettings(
   if (partial.refreshIntervalSec !== undefined) {
     const v = Number(partial.refreshIntervalSec);
     if (!Number.isFinite(v) || v < 10 || v > 3600) {
-      return { ok: false, error: 'بازه بروزرسانی باید بین ۱۰ تا ۳۶۰۰ ثانیه باشد.', value: current };
+      return { ok: false, error: 'بازه بروزرسانی باید بین 10 تا 3600 ثانیه باشد.', value: current };
     }
     next.refreshIntervalSec = Math.round(v);
   }
@@ -181,6 +189,12 @@ export function mergeAndValidateSettings(
       }
       next.manualOverridePriceToman = Math.round(v);
     }
+  }
+  if (partial.usdRateSource !== undefined) {
+    if (!VALID_RATE_SOURCES.has(partial.usdRateSource)) {
+      return { ok: false, error: 'مبنای نرخ ارز نامعتبر است.', value: current };
+    }
+    next.usdRateSource = partial.usdRateSource;
   }
   if (partial.notificationsEnabled !== undefined) {
     next.notificationsEnabled = Boolean(partial.notificationsEnabled);

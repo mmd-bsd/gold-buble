@@ -43,4 +43,5 @@ Optional: in **Project → Settings → Functions**, set the region to **Frankfu
 - `api/market.ts` fetches TGJU and Digikala readings (no computation, no storage).
 - The browser computes the theoretical price, reference price and bubble using the shared engine in `shared/`.
 - `src/hooks/useMarketData.ts` polls, persists history, and evaluates alert rules locally.
-- `shared/backfill.ts` supplies 45 days of daily closes on first load.
+- `shared/backfill.ts` supplies up to 2 years of daily closes on first load.
+- The theoretical price can be based on the free-market dollar or the TGJU tether (USDT) rate; the toggle is on the dashboard and in settings.

@@ -26,6 +26,7 @@ interface TgjuSymbolEntry {
 interface TgjuAjaxPayload {
   current?: {
     price_dollar_rl?: TgjuSymbolEntry;
+    'crypto-tether-irr'?: TgjuSymbolEntry;
     geram18?: TgjuSymbolEntry;
     ons?: TgjuSymbolEntry;
   };
@@ -52,10 +53,12 @@ export async function collectTgju(staleThresholdSec: number): Promise<CollectorR
     }
 
     const usdEntry = current.price_dollar_rl;
+    const tetherEntry = current['crypto-tether-irr'];
     const goldEntry = current.geram18;
     const onsEntry = current.ons;
 
     const usdIrr = parsePositiveNumeric(usdEntry?.p);
+    const usdtIrr = parsePositiveNumeric(tetherEntry?.p);
     const gold18IrrPerGram = parsePositiveNumeric(goldEntry?.p);
     const onsUsd = parsePositiveNumeric(onsEntry?.p);
 
@@ -66,6 +69,7 @@ export async function collectTgju(staleThresholdSec: number): Promise<CollectorR
     }
 
     const usdTsStr = typeof usdEntry?.ts === 'string' ? usdEntry.ts : null;
+    const usdtTsStr = typeof tetherEntry?.ts === 'string' ? tetherEntry.ts : null;
     const goldTsStr = typeof goldEntry?.ts === 'string' ? goldEntry.ts : null;
     const onsTsStr = typeof onsEntry?.ts === 'string' ? onsEntry.ts : null;
 
@@ -87,13 +91,18 @@ export async function collectTgju(staleThresholdSec: number): Promise<CollectorR
     const data: TgjuRawData = {
       usdIrr,
       usdToman: usdRialToToman(usdIrr),
+      usdtIrr,
+      usdtToman: usdtIrr !== null ? usdRialToToman(usdtIrr) : null,
       gold18IrrPerGram,
       gold18TomanPerGram: tgjuRialPerGramToToman(gold18IrrPerGram),
       onsUsd,
       usdTimestamp: usdTsStr,
+      usdtTimestamp: usdtTsStr,
       goldTimestamp: goldTsStr,
       onsTimestamp: onsTsStr,
       usdChangePercent: typeof usdEntry?.dp === 'number' ? (usdEntry.dt === 'low' ? -usdEntry.dp : usdEntry.dp) : null,
+      usdtChangePercent:
+        typeof tetherEntry?.dp === 'number' ? (tetherEntry.dt === 'low' ? -tetherEntry.dp : tetherEntry.dp) : null,
       goldChangePercent: typeof goldEntry?.dp === 'number' ? (goldEntry.dt === 'low' ? -goldEntry.dp : goldEntry.dp) : null,
       onsChangePercent: typeof onsEntry?.dp === 'number' ? (onsEntry.dt === 'low' ? -onsEntry.dp : onsEntry.dp) : null,
     };
@@ -148,11 +157,11 @@ export interface TgjuHistoricalDay {
 }
 
 export async function fetchTgjuDailyHistory(
-  slug: 'price_dollar_rl' | 'geram18' | 'ons',
-  days = 45
+  slug: 'price_dollar_rl' | 'crypto-tether-irr' | 'geram18' | 'ons',
+  days = 730
 ): Promise<TgjuHistoricalDay[]> {
   try {
-    const url = `${TGJU_HISTORY_BASE_URL}/${slug}?length=${Math.min(Math.max(days, 1), 180)}`;
+    const url = `${TGJU_HISTORY_BASE_URL}/${slug}?length=${Math.min(Math.max(days, 1), 800)}`;
     const response = await fetch(url, {
       headers: BROWSER_HEADERS,
       signal: AbortSignal.timeout(10_000),

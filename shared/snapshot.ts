@@ -100,13 +100,20 @@ export function buildMarketSnapshot(input: MarketBuildInput): MarketBuildResult 
 
   const usdIrr = tgju.data?.usdIrr ?? null;
   const usdToman = tgju.data?.usdToman ?? null;
+  const usdtIrr = tgju.data?.usdtIrr ?? null;
+  const usdtToman = tgju.data?.usdtToman ?? null;
   const globalOunceUsd = tgju.data?.onsUsd ?? null;
   const tgjuGold18Toman = tgju.data?.gold18TomanPerGram ?? null;
   const digikalaGold18Toman = digikala.data?.gold18TomanPerGram ?? null;
 
+  // The theoretical price can be based on the free-market dollar or on the
+  // USDT (tether) rate. Fall back to the dollar if tether is unavailable.
+  const useTether = settings.usdRateSource === 'tether' && usdtIrr !== null;
+  const effectiveRateIrr = useTether ? usdtIrr : usdIrr;
+
   const theoreticalPriceToman =
-    tgjuValid && usdIrr !== null && globalOunceUsd !== null
-      ? calculateTheoretical18KToman(globalOunceUsd, usdIrr).roundedToman
+    tgjuValid && effectiveRateIrr !== null && globalOunceUsd !== null
+      ? calculateTheoretical18KToman(globalOunceUsd, effectiveRateIrr).roundedToman
       : null;
 
   const refRes = resolveReferencePrice({
@@ -133,6 +140,9 @@ export function buildMarketSnapshot(input: MarketBuildInput): MarketBuildResult 
     timestamp: now,
     usdIrr,
     usdToman,
+    usdtIrr,
+    usdtToman,
+    usdRateSource: useTether ? 'tether' : 'dollar',
     globalOunceUsd,
     tgjuGold18Toman,
     digikalaGold18Toman,

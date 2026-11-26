@@ -25,6 +25,62 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
   const [primaryMode, setPrimaryMode] = useState<ChartMode>('bubble_toman');
   const recentRows = [...points].reverse().slice(0, 40);
 
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null;
+  const comparisonPrices = [
+    lastPoint?.theoreticalPriceToman,
+    lastPoint?.tgjuGold18Toman,
+    lastPoint?.digikalaGold18Toman,
+    lastPoint?.referencePriceToman,
+  ].filter((v): v is number => typeof v === 'number' && v > 0);
+  const minComp = comparisonPrices.length ? Math.min(...comparisonPrices) * 0.985 : 0;
+  const maxComp = comparisonPrices.length ? Math.max(...comparisonPrices) * 1.005 : 1;
+  const getBarPct = (val: number | null | undefined) => {
+    if (!val || maxComp <= minComp) return 0;
+    return Math.min(100, Math.max(6, ((val - minComp) / (maxComp - minComp)) * 100));
+  };
+  const bubbleSign = lastPoint?.bubbleToman ?? null;
+  const comparisonRows = [
+    {
+      label: 'ارزش تئوری جهانی (18 عیار)',
+      value: lastPoint?.theoreticalPriceToman,
+      barColor: 'bg-sky-400/80',
+      textColor: 'text-sky-300',
+      spread: 0,
+    },
+    {
+      label: 'TGJU (طلای 18 عیار بازار)',
+      value: lastPoint?.tgjuGold18Toman,
+      barColor: 'bg-slate-400/80',
+      textColor: 'text-slate-200',
+      spread:
+        lastPoint?.tgjuGold18Toman && lastPoint?.theoreticalPriceToman
+          ? lastPoint.tgjuGold18Toman - lastPoint.theoreticalPriceToman
+          : null,
+    },
+    {
+      label: 'دیجی‌کالا ولث (طلای دیجیتال 18 عیار)',
+      value: lastPoint?.digikalaGold18Toman,
+      barColor: 'bg-indigo-400/80',
+      textColor: 'text-slate-200',
+      spread:
+        lastPoint?.digikalaGold18Toman && lastPoint?.theoreticalPriceToman
+          ? lastPoint.digikalaGold18Toman - lastPoint.theoreticalPriceToman
+          : null,
+    },
+    {
+      label: 'قیمت مرجع منتخب',
+      value: lastPoint?.referencePriceToman,
+      barColor:
+        bubbleSign !== null && bubbleSign > 0
+          ? 'bg-red-400/80'
+          : bubbleSign !== null && bubbleSign < 0
+            ? 'bg-emerald-400/80'
+            : 'bg-amber-400/80',
+      textColor: 'text-amber-200',
+      spread: lastPoint?.bubbleToman ?? null,
+    },
+  ];
+
   return (
     <div className="space-y-7">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -35,7 +91,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
           </p>
         </div>
         <span className="text-[11.5px] tabular-nums text-slate-500">
-          کل رکوردهای ذخیره‌شده: {new Intl.NumberFormat('fa-IR').format(totalCount)}
+          کل رکوردهای ذخیره‌شده: {new Intl.NumberFormat('en-US').format(totalCount)}
         </span>
       </div>
 
@@ -49,6 +105,36 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         showModeTabs
         height={400}
       />
+
+      {/* Comparative price bars (moved off the dashboard to keep it compact) */}
+      <section className="rounded-2xl border border-white/[0.07] bg-panel p-5 md:p-6">
+        <h2 className="text-[14px] font-bold text-slate-100">مقایسه قیمت داخلی با ارزش تئوری</h2>
+        <div className="mt-4 space-y-3.5">
+          {comparisonRows.map((row) => (
+            <div key={row.label} className="space-y-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="text-[12px] font-medium text-slate-300">{row.label}</span>
+                <div className="flex items-center gap-3 text-[12px] tabular-nums">
+                  {row.spread !== null && row.spread !== 0 && (
+                    <span className={`text-[11px] ${row.spread > 0 ? 'text-red-300' : 'text-emerald-300'}`} dir="ltr">
+                      ({formatToman(row.spread, true)} ت)
+                    </span>
+                  )}
+                  <span className={`font-bold ${row.textColor}`} dir="ltr">
+                    {formatToman(row.value)}
+                  </span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.04]">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${row.barColor}`}
+                  style={{ width: `${getBarPct(row.value)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Secondary Grid of All 4 Analytical Charts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -90,7 +176,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
       <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-panel">
         <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3.5">
           <h2 className="text-[13.5px] font-semibold text-slate-100">جدول آخرین اندازه‌گیری‌های ثبت‌شده</h2>
-          <span className="text-[11.5px] text-slate-400">۴۰ رکورد اخیر در بازه انتخابی</span>
+          <span className="text-[11.5px] text-slate-400">40 رکورد اخیر در بازه انتخابی</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-[11.5px]">

@@ -38,7 +38,7 @@ export default function App() {
     { key: 'charts', label: 'نمودارها' },
     {
       key: 'alerts',
-      label: unreadAlerts > 0 ? `هشدارها (${new Intl.NumberFormat('fa-IR').format(unreadAlerts)})` : 'هشدارها',
+      label: unreadAlerts > 0 ? `هشدارها (${new Intl.NumberFormat('en-US').format(unreadAlerts)})` : 'هشدارها',
     },
     { key: 'settings', label: 'تنظیمات' },
   ];
@@ -125,10 +125,10 @@ export default function App() {
 
         {loading && !snapshot ? (
           <div className="space-y-5" aria-busy="true">
-            <div className="h-48 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="h-28 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
               {Array.from({ length: 6 }).map((_, idx) => (
-                <div key={idx} className="h-36 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
+                <div key={idx} className="h-16 animate-pulse rounded-xl border border-white/[0.05] bg-panel" />
               ))}
             </div>
             <div className="h-80 animate-pulse rounded-2xl border border-white/[0.05] bg-panel" />
@@ -141,10 +141,12 @@ export default function App() {
                 historyPoints={history?.points ?? []}
                 chartRange={chartRange}
                 onRangeChange={setChartRange}
-                onRefresh={refreshNow}
-                refreshing={refreshing}
                 onSelectReference={selectReferenceSource}
                 onOpenCharts={() => setActiveTab('charts')}
+                rateSource={settings.usdRateSource}
+                onRateSourceChange={async (source) => {
+                  await updateSettings({ usdRateSource: source });
+                }}
               />
             )}
 
@@ -195,7 +197,7 @@ export default function App() {
                 <span className="text-[10.5px] font-semibold">{label}</span>
                 {key === 'alerts' && unreadAlerts > 0 && (
                   <span className="absolute right-4 top-2 grid h-4 min-w-4 place-items-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-slate-950">
-                    {new Intl.NumberFormat('fa-IR').format(unreadAlerts)}
+                    {new Intl.NumberFormat('en-US').format(unreadAlerts)}
                   </span>
                 )}
               </button>

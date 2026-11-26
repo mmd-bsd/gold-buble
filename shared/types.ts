@@ -14,7 +14,10 @@ export type ReferenceMode =
 
 export type PreferredSource = 'auto' | 'tgju' | 'digikala';
 
-export type ChartRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | 'all';
+/** Which FX rate feeds the theoretical gold price. */
+export type UsdRateSource = 'dollar' | 'tether';
+
+export type ChartRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '1y' | '2y' | 'all';
 
 export type BubbleSign = 'positive' | 'negative' | 'zero';
 
@@ -44,13 +47,17 @@ export interface CollectorReading<T> {
 export interface TgjuRawData {
   usdIrr: number;
   usdToman: number;
+  usdtIrr: number | null;
+  usdtToman: number | null;
   gold18IrrPerGram: number;
   gold18TomanPerGram: number;
   onsUsd: number;
   usdTimestamp: string | null;
+  usdtTimestamp: string | null;
   goldTimestamp: string | null;
   onsTimestamp: string | null;
   usdChangePercent: number | null;
+  usdtChangePercent: number | null;
   goldChangePercent: number | null;
   onsChangePercent: number | null;
 }
@@ -68,6 +75,9 @@ export interface MeasurementRecord {
   timestamp: number;
   usdIrr: number | null;
   usdToman: number | null;
+  usdtIrr: number | null;
+  usdtToman: number | null;
+  usdRateSource: UsdRateSource;
   globalOunceUsd: number | null;
   tgjuGold18Toman: number | null;
   digikalaGold18Toman: number | null;
@@ -151,6 +161,7 @@ export interface AppSettings {
   defaultChartRange: ChartRange;
   manualOverrideEnabled: boolean;
   manualOverridePriceToman: number | null;
+  usdRateSource: UsdRateSource;
   notificationsEnabled: boolean;
   soundAlertsEnabled: boolean;
   nearZeroBandToman: number;

@@ -34,6 +34,10 @@ interface CollectorReadings {
   digikala: MarketApiResponse['digikala'];
 }
 
+const BACKFILL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const HISTORY_RETRY_MS = 30 * 60 * 1000;
+const BACKFILL_DAYS = 730;
+
 function readErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
@@ -88,6 +92,21 @@ export function useMarketData() {
   const liveRef = useRef(live);
   const backfillRef = useRef(backfill);
   const readingsRef = useRef<CollectorReadings | null>(null);
+  const lastHistoryFetchRef = useRef(0);
+  const prevRateSourceRef = useRef(settings.usdRateSource);
+
+  const shouldFetchHistory = useCallback(
+    (force = false) => {
+      if (force) return true;
+      if (Date.now() - lastHistoryFetchRef.current < HISTORY_RETRY_MS) return false;
+      const points = backfillRef.current;
+      if (points.length === 0) return true;
+      const latest = points[points.length - 1];
+      if ((latest.usdRateSource ?? 'dollar') !== settingsRef.current.usdRateSource) return true;
+      return Date.now() - latest.timestamp > BACKFILL_MAX_AGE_MS;
+    },
+    []
+  );
 
   const persistSettings = useCallback((next: AppSettings) => {
     settingsRef.current = next;
@@ -187,11 +206,16 @@ export function useMarketData() {
   );
 
   const fetchMarket = useCallback(
-    async (includeHistory: boolean) => {
+    async (forceHistory = false) => {
       const params = new URLSearchParams({
         stale: String(settingsRef.current.staleThresholdSec),
+        rate: settingsRef.current.usdRateSource,
       });
-      if (includeHistory) params.set('history', '1');
+      if (shouldFetchHistory(forceHistory)) {
+        params.set('history', '1');
+        params.set('days', String(BACKFILL_DAYS));
+        lastHistoryFetchRef.current = Date.now();
+      }
 
       const res = await fetch(`/api/market?${params.toString()}`);
       if (!res.ok) {
@@ -200,7 +224,7 @@ export function useMarketData() {
       const data = (await res.json()) as MarketApiResponse;
       applyMarketData(data);
     },
-    [applyMarketData]
+    [applyMarketData, shouldFetchHistory]
   );
 
   const recomputeSnapshot = useCallback((nextSettings: AppSettings) => {
@@ -222,7 +246,7 @@ export function useMarketData() {
     let cancelled = false;
     void (async () => {
       try {
-        await fetchMarket(backfillRef.current.length === 0);
+        await fetchMarket();
       } catch (err) {
         if (!cancelled) setError(readErrorMessage(err, 'خطای ارتباط با سرور'));
       } finally {
@@ -237,7 +261,7 @@ export function useMarketData() {
   useEffect(() => {
     const intervalSec = Math.max(10, settings.refreshIntervalSec);
     const id = window.setInterval(() => {
-      void fetchMarket(false).catch((err) => {
+      void fetchMarket().catch((err) => {
         setError(readErrorMessage(err, 'خطای ارتباط با سرور'));
       });
     }, intervalSec * 1000);
@@ -247,12 +271,24 @@ export function useMarketData() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        void fetchMarket(false).catch(() => {});
+        void fetchMarket().catch(() => {});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [fetchMarket]);
+
+  // Switching between dollar and tether changes the whole backfill series:
+  // drop the cached history and fetch it again with the new basis.
+  useEffect(() => {
+    if (prevRateSourceRef.current === settings.usdRateSource) return;
+    prevRateSourceRef.current = settings.usdRateSource;
+    persistBackfill([]);
+    lastHistoryFetchRef.current = 0;
+    void fetchMarket(true).catch((err) => {
+      setError(readErrorMessage(err, 'خطای ارتباط با سرور'));
+    });
+  }, [fetchMarket, persistBackfill, settings.usdRateSource]);
 
   const history = useMemo<HistoryResponse | null>(() => {
     if (live.length === 0 && backfill.length === 0) return null;
@@ -262,7 +298,7 @@ export function useMarketData() {
   const refreshNow = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchMarket(backfillRef.current.length === 0);
+      await fetchMarket();
       setError(null);
     } catch (err) {
       setError(readErrorMessage(err, 'خطا در بروزرسانی'));
@@ -338,7 +374,7 @@ export function useMarketData() {
       const nextWindow =
         updates.windowMinutes !== undefined ? Number(updates.windowMinutes) : existing.windowMinutes;
       if (!Number.isFinite(nextWindow) || nextWindow < 1 || nextWindow > 10080) {
-        throw new Error('بازه زمانی باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.');
+        throw new Error('بازه زمانی باید بین 1 تا 10080 دقیقه باشد.');
       }
 
       const nextCooldown =
@@ -346,7 +382,7 @@ export function useMarketData() {
           ? Number(updates.cooldownMinutes)
           : existing.cooldownMinutes;
       if (!Number.isFinite(nextCooldown) || nextCooldown < 1 || nextCooldown > 10080) {
-        throw new Error('زمان انتظار باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.');
+        throw new Error('زمان انتظار باید بین 1 تا 10080 دقیقه باشد.');
       }
 
       const updated: AlertRuleRecord = {

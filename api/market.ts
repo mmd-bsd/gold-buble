@@ -43,6 +43,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         ? Math.round(staleParam)
         : 300;
     const includeHistory = url.searchParams.get('history') === '1';
+    const rateSource = url.searchParams.get('rate') === 'tether' ? 'tether' : 'dollar';
+    const daysParam = Number(url.searchParams.get('days'));
+    const historyDays =
+      Number.isFinite(daysParam) && daysParam >= 30 && daysParam <= 730 ? Math.round(daysParam) : 730;
 
     const [tgju, digikala] = await Promise.all([
       collectTgju(staleThresholdSec),
@@ -52,12 +56,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     let history: MeasurementRecord[] | undefined;
     if (includeHistory) {
       try {
-        const [usdHist, goldHist, onsHist] = await Promise.all([
-          fetchTgjuDailyHistory('price_dollar_rl', 45),
-          fetchTgjuDailyHistory('geram18', 45),
-          fetchTgjuDailyHistory('ons', 45),
+        const [usdHist, goldHist, onsHist, tetherHist] = await Promise.all([
+          fetchTgjuDailyHistory('price_dollar_rl', historyDays),
+          fetchTgjuDailyHistory('geram18', historyDays),
+          fetchTgjuDailyHistory('ons', historyDays),
+          rateSource === 'tether'
+            ? fetchTgjuDailyHistory('crypto-tether-irr', historyDays)
+            : Promise.resolve([]),
         ]);
-        history = buildBackfillMeasurements(usdHist, goldHist, onsHist);
+        history = buildBackfillMeasurements(usdHist, goldHist, onsHist, tetherHist, rateSource);
       } catch {
         // Backfill is best-effort; live data is still returned.
         history = [];

@@ -30,14 +30,14 @@ All pricing math, history, settings, alert rules and alerts live in the browser.
 
 `src/hooks/useMarketData.ts` is the single data layer:
 
-1. `GET /api/market?stale=<sec>[&history=1]` -> `MarketApiResponse` (`shared/types.ts`).
+1. `GET /api/market?stale=<sec>[&history=1&days=730&rate=dollar|tether]` -> `MarketApiResponse` (`shared/types.ts`).
 2. `shared/snapshot.ts` turns the two collector readings plus local settings into a `MeasurementRecord` and `MarketSnapshot`.
 3. New measurements are appended to local storage (deduped within 5 minutes, capped at 5,000 live points).
 4. `shared/engine/alerts.ts` evaluates enabled rules against that history; resulting alerts and rule cooldowns are persisted locally.
 5. `shared/history.ts` filters/downsamples local points for the chart range (max 600 points).
 6. The hook polls every `refreshIntervalSec` (default 30 s) while the page is open and refetches when the tab becomes visible.
 
-`history=1` additionally fetches 45 days of TGJU daily closes (`shared/backfill.ts`) and stores them as daily backfill points, so long-range charts work on first load. Intraday history only accumulates while the page is open.
+`history=1` additionally fetches up to 730 days (2 years) of TGJU daily closes (`shared/backfill.ts`) and stores them as daily backfill points, so long-range charts work on first load. When `rate=tether`, the TGJU tether series (`crypto-tether-irr`) is included and feeds the theoretical price. The client refetches history when it is older than 12 h or after the user switches the rate basis. Intraday history only accumulates while the page is open.
 
 ### Money and unit rules
 
@@ -68,7 +68,7 @@ All pricing math, history, settings, alert rules and alerts live in the browser.
 - `goldbubble:rules:v1` — alert-rule overrides merged over seeded defaults.
 - `goldbubble:alerts:v1` — newest 200 alerts and acknowledgement flags.
 - `goldbubble:measurements:v1` — live points, newest 5,000.
-- `goldbubble:backfill:v1` — daily TGJU points, newest 60.
+- `goldbubble:backfill:v1` — daily TGJU points, newest 800 (2 years).
 - All reads/writes are guarded; private mode or a full quota degrades to in-memory state. Clearing site data deletes history and settings.
 
 ### Upstream collectors
@@ -78,7 +78,8 @@ All pricing math, history, settings, alert rules and alerts live in the browser.
 ### Frontend
 
 - No router: `src/App.tsx` owns the active tab (dashboard/charts/alerts/settings).
-- UI is Persian/RTL and dark-only (`#0B0F17`). Format all numbers/dates with `src/utils/formatters.ts` (`fa-IR`, Persian calendar); negative currency uses U+2212 `−`. New UI copy should be Persian.
+- The dashboard is intentionally a single screen: compact hero, six small rate tiles without descriptive sub-labels, and a short chart on phones. Do not reintroduce paragraph descriptions under the numbers.
+- UI is Persian/RTL and dark-only (`#0B0F17`). All numerals are Latin (`en-US`): amounts use compact K/M notation via `formatToman`/`formatCompactNumber`, dates use the Persian calendar with Latin digits (`fa-IR-u-ca-persian-nu-latn`), and negative currency uses U+2212 `−`. New UI copy should be Persian but must not use Persian digits.
 - Charts use `lightweight-charts` in `BubbleChartPanel`; it receives already-downsampled `MeasurementRecord[]`.
 - Tailwind v4 through `@tailwindcss/vite` — no `tailwind.config`; theme tokens live in `src/index.css`. Typography is Estedad for Persian/numerals with IBM Plex Mono for Latin-only technical strings, loaded from Google Fonts in `index.html`.
 - PWA: `vite-plugin-pwa` generates the manifest/service worker for installability only. There is no push service worker; keep `navigateFallbackDenylist` for `/api/`.
